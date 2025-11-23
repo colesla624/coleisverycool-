@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Platformer with Coins</title>
+  <title>Platformer with Coins & Enemies</title>
   <style>
     body { margin:0; background:#111; }
     canvas { display:block; }
@@ -43,32 +43,34 @@ const TILE=32;
 let coinTotal=0;
 let playerColor="#ffd166";
 
-// Example levels with coins
-const levels=[
-  {
-    name:"Level 1",
+// Generate 22 levels with coins + enemies
+const levels=[];
+for(let i=1;i<=22;i++){
+  const tiles=Array.from({length:16},(_,y)=>{
+    const row=Array(32).fill(0);
+    if(y===15){row.fill(1);row[30]=4;} // ground + goal
+    if(i%2===0 && y===13){row[8]=1;row[12]=1;row[16]=1;row[20]=1;}
+    if(i%3===0 && y===14){row[5]=2;row[6]=2;} // hazards
+    return row;
+  });
+  const coins=[
+    {x:200,y:400,collected:false},
+    {x:400,y:300,collected:false},
+    {x:600,y:350,collected:false}
+  ];
+  const enemies=[
+    {x:350,y:450,w:24,h:28,dir:1},
+    {x:500,y:450,w:24,h:28,dir:-1}
+  ];
+  levels.push({
+    name:"Level "+i,
     width:32,height:16,
-    tiles:Array.from({length:16},(_,y)=>{
-      const row=Array(32).fill(0);
-      if(y===15){row.fill(1);row[30]=4;}
-      return row;
-    }),
+    tiles:tiles,
     start:{x:TILE*2,y:(15*TILE)-28},
-    coins:[{x:200,y:400,collected:false},{x:400,y:300,collected:false}]
-  },
-  {
-    name:"Level 2",
-    width:32,height:16,
-    tiles:Array.from({length:16},(_,y)=>{
-      const row=Array(32).fill(0);
-      if(y===15){row.fill(1);row[28]=4;}
-      if(y===13){row[10]=1;row[14]=1;row[18]=1;}
-      return row;
-    }),
-    start:{x:TILE*2,y:(15*TILE)-28},
-    coins:[{x:300,y:350,collected:false},{x:500,y:350,collected:false}]
-  }
-];
+    coins:coins,
+    enemies:enemies
+  });
+}
 let levelIndex=0;
 
 const player={x:0,y:0,w:24,h:28,vx:0,vy:0,onGround:false};
@@ -133,6 +135,7 @@ function update(dt){
     player.vy=0;player.onGround=true;
     if(t===4){loadLevel(levelIndex+1);}
   }
+  if(t===2){loadLevel(levelIndex);} // hazard resets
 
   // coin collection
   for(const c of levels[levelIndex].coins){
@@ -142,6 +145,16 @@ function update(dt){
       c.collected=true;
       coinTotal++;
       document.getElementById("levelLabel").textContent=levels[levelIndex].name+" | Coins: "+coinTotal;
+    }
+  }
+
+  // enemies movement + collision
+  for(const e of levels[levelIndex].enemies){
+    e.x+=e.dir*60*dt;
+    if(e.x<300||e.x>600) e.dir*=-1; // patrol bounds
+    if(player.x<e.x+e.w && player.x+player.w>e.x &&
+       player.y<e.y+e.h && player.y+player.h>e.y){
+      loadLevel(levelIndex); // collision resets level
     }
   }
 }
@@ -154,6 +167,7 @@ function draw(){
       const t=L.tiles[y][x];if(!t)continue;
       const px=x*TILE,py=y*TILE;
       if(t===1){ctx.fillStyle="#555";ctx.fillRect(px,py,TILE,TILE);}
+      if(t===2){ctx.fillStyle=(Math.floor(Date.now()/200)%2?"#b71c1c":"#ff7043");ctx.fillRect(px,py,TILE,TILE);}
       if(t===4){ctx.fillStyle="#1e88e5";ctx.fillRect(px,py,TILE,TILE);}
     }
   }
@@ -164,6 +178,10 @@ function draw(){
       ctx.arc(c.x,c.y,10,0,Math.PI*2);
       ctx.fill();
     }
+  }
+  for(const e of L.enemies){
+    ctx.fillStyle="#ff4444";
+    ctx.fillRect(e.x,e.y,e.w,e.h);
   }
   ctx.fillStyle=playerColor;
   ctx.fillRect(player.x,player.y,player.w,player.h);
