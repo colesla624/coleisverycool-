@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>100-Level Boss Platformer</title>
+  <title>100-Level Diverse Boss Platformer</title>
   <style>
     body { margin:0; background:#111; }
     canvas { display:block; }
@@ -52,22 +52,49 @@ const player={x:0,y:0,w:24,h:28,vx:0,vy:0,onGround:false,jumps:0};
 
 const levels=[];
 
+// Themes
+function grasslands(i){return {theme:"Grasslands",hazards:[{x:5,y:14}],coins:[{x:200,y:400}],enemies:[{type:"patrol",x:300,y:450,w:24,h:28,dir:1,minX:280,maxX:600,speed:60}]};}
+function caves(i){return {theme:"Caves",dark:true,hazards:[{x:10,y:14}],coins:[{x:400,y:300}],enemies:[{type:"fly",x:480,y:360,w:22,h:22,t:0,ampX:40,ampY:25,baseX:480,baseY:360,speed:2}]};}
+function sky(i){return {theme:"Sky",platforms:[{x:16*TILE,y:11*TILE,w:TILE,h:TILE,vx:0,vy:-40,minY:9*TILE,maxY:12*TILE}],coins:[{x:600,y:220}],enemies:[]};}
+function lava(i){return {theme:"Lava",hazards:[{x:6,y:14},{x:7,y:14},{x:8,y:14}],coins:[{x:260,y:340}],enemies:[{type:"chase",x:520,y:450,w:24,h:28,speed:85,range:240}]};}
+function ice(i){return {theme:"Ice",slippery:true,coins:[{x:300,y:350}],enemies:[{type:"patrol",x:400,y:450,w:24,h:28,dir:1,minX:380,maxX:600,speed:70}]};}
+function factory(i){return {theme:"Factory",conveyor:true,coins:[{x:420,y:320}],enemies:[{type:"turret",x:500,y:400,w:20,h:20,fire:0}]};}
+function haunted(i){return {theme:"Haunted",coins:[{x:380,y:350}],enemies:[{type:"ghost",x:440,y:450,w:24,h:28,t:0}]};}
+function jungle(i){return {theme:"Jungle",coins:[{x:320,y:300}],platforms:[{x:200,y:10*TILE,w:TILE,h:TILE,vx:50,vy:0,minX:180,maxX:220}],enemies:[]};}
+function space(i){return {theme:"Space",lowGravity:true,coins:[{x:500,y:280}],enemies:[{type:"fly",x:480,y:360,w:22,h:22,t:0,ampX:60,ampY:40,baseX:480,baseY:360,speed:1}]};}
+
+// Boss generator
+function bossLevel(i){
+  return {boss:true,enemies:[{type:"boss",x:400,y:400,w:60,h:60,hp:5}]};
+}
+
 // Generate 100 levels
 for(let i=1;i<=100;i++){
   const boss=(i%10===0);
+  let themeData;
+  if(boss){themeData=bossLevel(i);}
+  else if(i<=10)themeData=grasslands(i);
+  else if(i<=20)themeData=caves(i);
+  else if(i<=30)themeData=sky(i);
+  else if(i<=40)themeData=lava(i);
+  else if(i<=50)themeData=ice(i);
+  else if(i<=60)themeData=factory(i);
+  else if(i<=70)themeData=haunted(i);
+  else if(i<=80)themeData=jungle(i);
+  else if(i<=90)themeData=space(i);
+  else themeData={theme:"Boss Rush",boss:true,enemies:[{type:"boss",x:400,y:400,w:60,h:60,hp:10}]};
+
   const tiles=Array.from({length:H},(_,y)=>Array(W).fill(0));
   tiles[15].fill(1);
-  if(!boss) tiles[15][30]=4; // goal only if not boss
-  // Add variety
-  if(i%3===0) tiles[14][5]=2; // hazard
-  if(i%4===0) tiles[13][10]=5; // bounce pad
-  if(i%5===0) tiles[12][15]=6; // breakable
-  if(i%6===0) tiles[11][20]=8; // door
-  const coins=boss?[]:[{x:200,y:400,collected:false},{x:400,y:300,collected:false}];
-  const enemies=boss?[{type:"boss",x:400,y:400,w:60,h:60,hp:5}]:[{type:"patrol",x:300,y:450,w:24,h:28,dir:1,minX:280,maxX:600,speed:60}];
+  if(!boss) tiles[15][30]=4;
+
   levels.push({name:"Level "+i+(boss?" (Boss)":""),
                tiles,start:{x:TILE*2,y:(15*TILE)-28},
-               coins,enemies,boss});
+               coins:themeData.coins||[],enemies:themeData.enemies||[],
+               platforms:themeData.platforms||[],hazards:themeData.hazards||[],
+               boss,theme:themeData.theme||"",dark:themeData.dark||false,
+               slippery:themeData.slippery||false,conveyor:themeData.conveyor||false,
+               lowGravity:themeData.lowGravity||false});
 }
 
 let levelIndex=0;
@@ -106,67 +133,4 @@ let moveVec={x:0};
 
 // Double jump
 function tryJump(){if(player.jumps<2){player.vy=-500;player.onGround=false;player.jumps++;}}
-document.getElementById('jumpBtn').addEventListener('touchstart',tryJump);
-
-function update(dt){
-  const L=levels[levelIndex];
-  const left=keys["ArrowLeft"]||moveVec.x<-0.2;
-  const right=keys["ArrowRight"]||moveVec.x>0.2;
-  if(left&&!right)player.vx=-200;else if(right&&!left)player.vx=200;else player.vx=0;
-  if(keys["Space"])tryJump();
-
-  player.vy+=1000*dt;player.x+=player.vx*dt;player.y+=player.vy*dt;
-
-  // Ground collision
-  if(player.y+player.h>15*TILE){
-    player.y=15*TILE-player.h;player.vy=0;player.onGround=true;player.jumps=0;
-  }
-
-  // Coins
-  for(const c of L.coins){
-    if(!c.collected && player.x< c.x && player.x+player.w>c.x && player.y< c.y && player.y+player.h>c.y){
-      c.collected=true;coinTotal++;
-      document.getElementById("levelLabel").textContent=L.name+" | Coins: "+coinTotal;
-    }
-  }
-
-  // Enemies
-  for(const e of L.enemies){
-    if(e.type==="patrol"){
-      e.x+=e.dir*e.speed*dt;
-      if(e.x<e.minX||e.x>e.maxX)e.dir*=-1;
-    }
-    if(player.x<e.x+e.w && player.x+player.w>e.x && player.y<e.y+e.h && player.y+player.h>e.y){
-      if(e.type==="boss"){
-        e.hp--; // hit boss
-        if(e.hp<=0){coinTotal+=100;loadLevel(levelIndex+1);}
-      }else{loadLevel(levelIndex);} // reset
-    }
-  }
-
-  // Goal
-  if(!L.boss && player.x>30*TILE){loadLevel(levelIndex+1);}
-}
-
-function draw(){
-  const L=levels[levelIndex];
-  ctx.fillStyle="#222";ctx.fillRect(0,0,canvas.width,canvas.height);
-  // Ground
-  ctx.fillStyle="#555";ctx.fillRect(0,15*TILE,canvas.width,TILE);
-  // Coins
-  for(const c of L.coins){if(!c.collected){ctx.fillStyle="#ffd700";ctx.beginPath();ctx.arc(c.x,c.y,10,0,Math.PI*2);ctx.fill();}}
-  // Enemies
-  for(const e of L.enemies){
-    ctx.fillStyle=e.type==="boss"?"#f44336":"#ff4444";
-    ctx.fillRect(e.x,e.y,e.w,e.h);
-  }
-  // Player
-  ctx.fillStyle=playerColor;ctx.fillRect(player.x,player.y,player.w,player.h);
-}
-
-let last=performance.now();
-function loop(now){const dt=(now-last)/1000;last=now;update(dt);draw();requestAnimationFrame(loop);}
-requestAnimationFrame(loop);
-</script>
-</body>
-</html>
+document.get
