@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Platformer with Coins & Shop Toggle</title>
+  <title>Platformer with Coins</title>
   <style>
     body { margin:0; background:#111; }
     canvas { display:block; }
@@ -25,17 +25,6 @@
       position:fixed; top:8px; left:50%; transform:translateX(-50%);
       color:#fff; font-family:sans-serif; font-size:20px;
     }
-    .shop {
-      position:fixed; top:60px; right:20px; background:#222; color:#fff;
-      padding:10px; border-radius:8px; font-family:sans-serif;
-      display:none; /* hidden by default */
-    }
-    .shop button { margin:4px; padding:6px; }
-    #shopToggle {
-      position:fixed; top:60px; left:20px;
-      background:#fff; border:none; padding:8px 12px;
-      border-radius:6px; font-weight:bold;
-    }
   </style>
 </head>
 <body>
@@ -46,19 +35,6 @@
   <div id="jumpBtn" class="btn">Jump</div>
 </div>
 
-<!-- Shop toggle button -->
-<button id="shopToggle">Shop</button>
-
-<!-- Shop panel -->
-<div class="shop" id="shop">
-  <div>Coins: <span id="coinCount">0</span></div>
-  <div>Shop:</div>
-  <button onclick="buyColor('#ffd166')">Yellow (Free)</button>
-  <button onclick="buyColor('#ff0000')">Red (10)</button>
-  <button onclick="buyColor('#00ff00')">Green (10)</button>
-  <button onclick="buyColor('#0000ff')">Blue (10)</button>
-</div>
-
 <script>
 const canvas=document.getElementById("game"),ctx=canvas.getContext("2d");
 canvas.width=window.innerWidth;canvas.height=window.innerHeight;
@@ -67,7 +43,7 @@ const TILE=32;
 let coinTotal=0;
 let playerColor="#ffd166";
 
-// Simple levels
+// Example levels with coins
 const levels=[
   {
     name:"Level 1",
@@ -98,7 +74,7 @@ let levelIndex=0;
 const player={x:0,y:0,w:24,h:28,vx:0,vy:0,onGround:false};
 function loadLevel(i){
   levelIndex=i%levels.length;
-  document.getElementById("levelLabel").textContent=levels[levelIndex].name;
+  document.getElementById("levelLabel").textContent=levels[levelIndex].name+" | Coins: "+coinTotal;
   player.x=levels[levelIndex].start.x;
   player.y=levels[levelIndex].start.y;
   player.vx=player.vy=0;
@@ -165,7 +141,7 @@ function update(dt){
        player.y< c.y && player.y+player.h>c.y){
       c.collected=true;
       coinTotal++;
-      document.getElementById("coinCount").textContent=coinTotal;
+      document.getElementById("levelLabel").textContent=levels[levelIndex].name+" | Coins: "+coinTotal;
     }
   }
 }
@@ -201,11 +177,6 @@ function loop(now){
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
-
-// Shop logic
-function buyColor(color){
-  if(color==="#ffd166"){playerColor=color;return;}
-  if(coinTotal>=10){
-    coinTotal-=10;
-    document.getElementById("coinCount").textContent=coinTotal;
-    playerColor=color;
+</script>
+</body>
+</html>
