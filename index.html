@@ -2,525 +2,996 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>100-Level Diverse Platformer</title>
+  <title>100-Level Platformer with Safety Buffer and Invulnerability</title>
   <style>
+    /* Basic page and canvas styling */
     body { margin:0; background:#111; }
     canvas { display:block; }
+
+    /* HUD container and input elements */
     .hud { position:fixed; inset:0; pointer-events:none; }
     .stick-area, .btn { pointer-events:auto; touch-action:none; }
+
     .stick-area {
-      position:fixed; bottom:16px; left:16px; width:120px; height:120px;
-      border-radius:50%; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.12);
+      position:fixed;
+      bottom:16px; left:16px;
+      width:120px; height:120px;
+      border-radius:50%;
+      background:rgba(255,255,255,0.08);
+      border:1px solid rgba(255,255,255,0.12);
     }
     .stick-knob {
-      position:absolute; left:50%; top:50%; width:40px; height:40px;
-      border-radius:50%; background:#0af; transform:translate(-50%,-50%);
+      position:absolute; left:50%; top:50%;
+      width:40px; height:40px;
+      border-radius:50%;
+      background:#0af;
+      transform:translate(-50%,-50%);
     }
     .btn {
-      position:fixed; right:16px; bottom:16px; width:80px; height:80px;
-      border-radius:50%; background:#fff; display:flex; align-items:center; justify-content:center;
+      position:fixed; right:16px; bottom:16px;
+      width:80px; height:80px;
+      border-radius:50%;
+      background:#fff;
+      display:flex; align-items:center; justify-content:center;
       font-weight:bold; user-select:none;
     }
     .label {
-      position:fixed; top:8px; left:50%; transform:translateX(-50%);
-      color:#fff; font-family:sans-serif; font-size:18px; background:rgba(0,0,0,0.4);
+      position:fixed; top:8px; left:50%;
+      transform:translateX(-50%);
+      color:#fff; font-family:sans-serif; font-size:18px;
+      background:rgba(0,0,0,0.4);
       padding:6px 10px; border-radius:8px;
     }
     #skipBtn {
       position:fixed; top:60px; right:20px;
-      background:#fff; border:none; padding:8px 12px; border-radius:6px; font-weight:bold; display:none; cursor:pointer;
+      background:#fff; border:none; padding:8px 12px; border-radius:6px;
+      font-weight:bold; display:none; cursor:pointer;
     }
   </style>
 </head>
 <body>
 <canvas id="game"></canvas>
+
 <div class="hud">
   <div class="label" id="levelLabel">Level 1 | Coins: 0</div>
   <div id="moveStick" class="stick-area"><div id="moveKnob" class="stick-knob"></div></div>
   <div id="jumpBtn" class="btn">Jump</div>
 </div>
+
 <button id="skipBtn">Skip Boss</button>
 
 <script>
-const canvas = document.getElementById("game"), ctx = canvas.getContext("2d");
-function resize(){ canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
-resize(); window.addEventListener('resize', resize);
+/* ============================================================
+   Canvas and sizing
+   ============================================================ */
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener("resize", resize);
 
-const TILE=32, GROUND_Y=15*TILE;
-let coinTotal=0, hasKey=false;
+/* ============================================================
+   Game constants
+   ============================================================ */
+const TILE = 32;
+const GROUND_Y = 15 * TILE;
 
-const player = { x:64, y:GROUND_Y-28, w:24, h:28, vx:0, vy:0, onGround:false, jumps:0, face:1, color:"#ffd166" };
+/* ============================================================
+   Player state
+   ============================================================ */
+let coinTotal = 0;
+const player = {
+  x: 64,
+  y: GROUND_Y - 28,
+  w: 24,
+  h: 28,
+  vx: 0,
+  vy: 0,
+  onGround: false,
+  jumps: 0,
+  face: 1,
+  color: "#ffd166"
+};
 
+/* ============================================================
+   Input (keyboard and touch)
+   ============================================================ */
 const keys = {};
-window.addEventListener("keydown", e => keys[e.code] = true);
-window.addEventListener("keyup", e => keys[e.code] = false);
+window.addEventListener("keydown", (e) => (keys[e.code] = true));
+window.addEventListener("keyup", (e) => (keys[e.code] = false));
 
-// Touch move
-let moveVec={x:0};
-(function setupStick(){
-  const area=document.getElementById('moveStick'),knob=document.getElementById('moveKnob');
-  let active=false,startX=0;
-  area.addEventListener('touchstart',e=>{active=true;startX=e.touches[0].clientX;});
-  area.addEventListener('touchmove',e=>{
-    if(!active)return;
-    const dx=e.touches[0].clientX-startX;
-    const radius=area.clientWidth/2-20;
-    const nx=Math.max(-radius,Math.min(radius,dx));
-    knob.style.left=`calc(50% + ${nx}px)`; moveVec.x=nx/radius;
+let moveVec = { x: 0 };
+(function setupStick() {
+  const area = document.getElementById("moveStick");
+  const knob = document.getElementById("moveKnob");
+  let active = false;
+  let startX = 0;
+
+  area.addEventListener("touchstart", (e) => {
+    active = true;
+    startX = e.touches[0].clientX;
   });
-  area.addEventListener('touchend',()=>{active=false;moveVec.x=0;knob.style.left='50%';});
+  area.addEventListener("touchmove", (e) => {
+    if (!active) return;
+    const dx = e.touches[0].clientX - startX;
+    const radius = area.clientWidth / 2 - 20;
+    const nx = Math.max(-radius, Math.min(radius, dx));
+    knob.style.left = `calc(50% + ${nx}px)`;
+    moveVec.x = nx / radius;
+  });
+  area.addEventListener("touchend", () => {
+    active = false;
+    moveVec.x = 0;
+    knob.style.left = "50%";
+  });
 })();
 
-// Double jump
-function tryJump(){ if(player.jumps<2){ player.vy = -520; player.onGround=false; player.jumps++; } }
-document.getElementById('jumpBtn').addEventListener('touchstart', tryJump);
+function tryJump() {
+  if (player.jumps < 2) {
+    player.vy = -520;
+    player.onGround = false;
+    player.jumps++;
+  }
+}
+document.getElementById("jumpBtn").addEventListener("touchstart", tryJump);
 
-// Utils
-function aabb(ax,ay,aw,ah,bx,by,bw,bh){ return ax < bx+bw && ax+aw > bx && ay < by+bh && ay+ah > by; }
-function onTopOf(ax,ay,aw,ah,bx,by,bw,bh){ return aabb(ax,ay,aw,ah,bx,by,bw,bh) && (ay+ah) <= (by+10) && player.vy>=0; }
+/* ============================================================
+   Utility functions
+   ============================================================ */
+function aabb(ax, ay, aw, ah, bx, by, bw, bh) {
+  return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
+}
+function onTopOf(ax, ay, aw, ah, bx, by, bw, bh) {
+  return aabb(ax, ay, aw, ah, bx, by, bw, bh) && ay + ah <= by + 10 && player.vy >= 0;
+}
 
-// Deterministic PRNG per level
-function makePRNG(seed){ let s=seed>>>0; return function(){ s=(s*1664525+1013904223)>>>0; return (s&0xffffffff)/4294967296; }; }
-
-// Runtime objects
-let levelIndex = 0;
-let level = null;
-const bullets = [];
-function setHUD(name){ document.getElementById("levelLabel").textContent = `${name} | Coins: ${coinTotal}`; }
-
-// Level template
-function makeLevelBase(name){
-  return {
-    name, bg:"#222",
-    dark:false, flashlight:false,
-    lowGravity:false, friction:1.0,
-    conveyorZones:[], platforms:[], hazards:[],
-    bouncePads:[], breakables:[],
-    door:null, key:null,
-    coins:[], enemies:[],
-    boss:false, bossReward:100,
-    goal:{x:canvas.width-140, y:GROUND_Y-32, w:90, h:32}
+/* Deterministic PRNG per level index for repeatable variety */
+function makePRNG(seed) {
+  let s = seed >>> 0;
+  return function () {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return (s & 0xffffffff) / 4294967296;
   };
 }
 
-// Per-world generators with per-level randomness
-function genGrasslands(i, rnd){
-  const L=makeLevelBase(`Level ${i} - Grasslands`);
+/* ============================================================
+   Invulnerability after death
+   ============================================================ */
+let invulnerable = false;
+let invulnTimer = 0;
+
+/* ============================================================
+   Level management
+   ============================================================ */
+let levelIndex = 1;
+let level = null;
+const bullets = [];
+let hasKey = false;
+
+function setHUD(name) {
+  document.getElementById("levelLabel").textContent = `${name} | Coins: ${coinTotal}`;
+}
+
+/* Base Level Structure */
+function makeLevelBase(name) {
+  return {
+    name,
+    bg: "#222",
+    dark: false,
+    flashlight: false,
+    lowGravity: false,
+    friction: 1.0,
+    conveyorZones: [],  // {x,y,w,h,speed}
+    platforms: [],      // {x,y,w,h,vx,vy,minX,maxX,minY,maxY}
+    hazards: [],        // {x,y,w,h}
+    bouncePads: [],     // {x,y,w,h,power}
+    breakables: [],     // {x,y,w,h,broken:false}
+    door: null,         // {x,y,w,h}
+    key: null,          // {x,y,w,h, collected:false}
+    coins: [],          // {x,y,r, collected:false}
+    enemies: [],        // objects with type
+    boss: false,
+    bossReward: 100,
+    goal: { x: canvas.width - 160, y: GROUND_Y - 32, w: 100, h: 32 }
+  };
+}
+
+/* ============================================================
+   Safety Buffer: lethal spawn must be >= 1 player cube away
+   ============================================================ */
+function safePlaceRect(obj, startX, startY) {
+  // We use player's max dimension as "cube" side length
+  const cube = Math.max(player.w, player.h);
+  // For rectangles, test shortest distance in axis-aligned sense
+  const dx = Math.abs((obj.x + obj.w / 2) - (startX + player.w / 2));
+  const dy = Math.abs((obj.y + obj.h / 2) - (startY + player.h / 2));
+  // Must be away by at least one cube on either axis
+  return dx > cube || dy > cube;
+}
+function safePlacePoint(obj, startX, startY) {
+  const cube = Math.max(player.w, player.h);
+  const dx = Math.abs(obj.x - (startX + player.w / 2));
+  const dy = Math.abs(obj.y - (startY + player.h / 2));
+  return dx > cube || dy > cube;
+}
+
+/* Helper to insert hazards safely */
+function pushHazardSafe(L, hazard) {
+  if (safePlaceRect(hazard, 64, GROUND_Y - 28)) {
+    L.hazards.push(hazard);
+  }
+}
+/* Helper to insert enemy safely */
+function pushEnemySafe(L, enemy) {
+  const rectLike = { x: enemy.x, y: enemy.y, w: enemy.w || 24, h: enemy.h || 24 };
+  if (safePlaceRect(rectLike, 64, GROUND_Y - 28)) {
+    L.enemies.push(enemy);
+  }
+}
+/* Helper to insert bullet safely (for spawns close to player at start) */
+function pushBulletSafe(b) {
+  const rectLike = { x: b.x, y: b.y, w: b.w || 6, h: b.h || 6 };
+  if (safePlaceRect(rectLike, 64, GROUND_Y - 28)) {
+    bullets.push(b);
+  }
+}
+
+/* ============================================================
+   World Generators (each world has 10 levels)
+   Every lethal placement uses safety buffer helpers.
+   ============================================================ */
+
+/* Tutorial Level (1) */
+function genTutorial() {
+  const L = makeLevelBase("Level 1 - Tutorial");
   L.bg = "#254027";
-  const islands = 2 + Math.floor(rnd()*3);
-  for(let k=0;k<islands;k++){
-    const pw = 80 + Math.floor(rnd()*80);
-    const px = 200 + Math.floor(rnd()*500);
-    const py = GROUND_Y - (80 + Math.floor(rnd()*120));
+  // Safe and simple
+  L.platforms.push({ x: 220, y: GROUND_Y - 80, w: 120, h: 12 });
+  L.coins.push({ x: 240, y: GROUND_Y - 100, r: 10, collected: false });
+  // No hazards near spawn
+  return L;
+}
+
+/* Grasslands (2-10 except boss) */
+function genGrasslands(i, rnd) {
+  const L = makeLevelBase(`Level ${i} - Grasslands`);
+  L.bg = "#254027";
+
+  // Random platforms (non-lethal)
+  const islands = 2 + Math.floor(rnd() * 3);
+  for (let k = 0; k < islands; k++) {
+    const pw = 80 + Math.floor(rnd() * 80);
+    const px = 200 + Math.floor(rnd() * 500);
+    const py = GROUND_Y - (80 + Math.floor(rnd() * 120));
     const moving = rnd() < 0.4;
-    L.platforms.push({x:px,y:py,w:pw,h:12,vx:moving? (rnd()<0.5?50:-50):0,vy:0,minX:px-60,maxX:px+60});
-    if(rnd()<0.6) L.coins.push({x:px+pw/2,y:py-30,r:10,collected:false});
+    L.platforms.push({
+      x: px, y: py, w: pw, h: 12,
+      vx: moving ? (rnd() < 0.5 ? 50 : -50) : 0,
+      vy: 0, minX: px - 60, maxX: px + 60
+    });
+    if (rnd() < 0.6) L.coins.push({ x: px + pw / 2, y: py - 30, r: 10, collected: false });
   }
-  if(rnd()<0.7) L.hazards.push({x:200+Math.floor(rnd()*600),y:GROUND_Y-16,w:60+Math.floor(rnd()*80),h:16});
-  const patrols = 1 + Math.floor(rnd()*2);
-  for(let p=0;p<patrols;p++){
-    const base=240+Math.floor(rnd()*500);
-    L.enemies.push({type:"patrol",x:base,y:GROUND_Y-28,w:24,h:28,dir:rnd()<0.5?-1:1,minX:base-80,maxX:base+120,speed:60+Math.floor(rnd()*40)});
+
+  // Hazards with safety buffer
+  if (rnd() < 0.7) {
+    const hazard = { x: 200 + Math.floor(rnd() * 600), y: GROUND_Y - 16, w: 60 + Math.floor(rnd() * 80), h: 16 };
+    pushHazardSafe(L, hazard);
   }
+
+  // Patrol enemies safely
+  const patrols = 1 + Math.floor(rnd() * 2);
+  for (let p = 0; p < patrols; p++) {
+    const base = 240 + Math.floor(rnd() * 500);
+    const enemy = {
+      type: "patrol",
+      x: base, y: GROUND_Y - 28, w: 24, h: 28,
+      dir: rnd() < 0.5 ? -1 : 1,
+      minX: base - 80, maxX: base + 120,
+      speed: 60 + Math.floor(rnd() * 40)
+    };
+    pushEnemySafe(L, enemy);
+  }
+
   return L;
 }
 
-function genCaves(i, rnd){
-  const L=makeLevelBase(`Level ${i} - Caves`);
-  L.bg = "#1c1c1c"; L.dark=true; L.flashlight=true;
-  const ledges = 3 + Math.floor(rnd()*2);
-  for(let k=0;k<ledges;k++){
-    const px = 160 + Math.floor(rnd()*520);
-    const py = GROUND_Y - (80 + Math.floor(rnd()*180));
-    const pw = 60 + Math.floor(rnd()*100);
-    L.platforms.push({x:px,y:py,w:pw,h:12});
-    if(rnd()<0.5) L.breakables.push({x:px+Math.floor(rnd()*pw*0.6),y:py-12,w:40,h:12,broken:false});
-    if(rnd()<0.6) L.coins.push({x:px+pw/2,y:py-30,r:10,collected:false});
+/* Caves (11-19) with flashlight */
+function genCaves(i, rnd) {
+  const L = makeLevelBase(`Level ${i} - Caves`);
+  L.bg = "#1c1c1c";
+  L.dark = true;
+  L.flashlight = true;
+
+  // Ledges and breakables
+  const ledges = 3 + Math.floor(rnd() * 2);
+  for (let k = 0; k < ledges; k++) {
+    const px = 160 + Math.floor(rnd() * 520);
+    const py = GROUND_Y - (80 + Math.floor(rnd() * 180));
+    const pw = 60 + Math.floor(rnd() * 100);
+    L.platforms.push({ x: px, y: py, w: pw, h: 12 });
+    if (rnd() < 0.5) L.breakables.push({ x: px + Math.floor(rnd() * pw * 0.6), y: py - 12, w: 40, h: 12, broken: false });
+    if (rnd() < 0.6) L.coins.push({ x: px + pw / 2, y: py - 30, r: 10, collected: false });
   }
-  const pits = 1 + Math.floor(rnd()*2);
-  for(let k=0;k<pits;k++){
-    L.hazards.push({x:220+Math.floor(rnd()*540),y:GROUND_Y-16,w:50+Math.floor(rnd()*70),h:16});
+
+  // Lava pits hazards safely
+  const pits = 1 + Math.floor(rnd() * 2);
+  for (let k = 0; k < pits; k++) {
+    const hazard = { x: 220 + Math.floor(rnd() * 540), y: GROUND_Y - 16, w: 50 + Math.floor(rnd() * 70), h: 16 };
+    pushHazardSafe(L, hazard);
   }
-  const bats = 1 + Math.floor(rnd()*3);
-  for(let b=0;b<bats;b++){
-    const bx=220+Math.floor(rnd()*540), by=GROUND_Y-(100+Math.floor(rnd()*180));
-    L.enemies.push({type:"fly",x:bx,y:by,w:22,h:22,t:rnd()*6,ampX:40+Math.floor(rnd()*30),ampY:25+Math.floor(rnd()*20),baseX:bx,baseY:by,speed:1.5+rnd()*1.2});
+
+  // Flying bats safely
+  const bats = 1 + Math.floor(rnd() * 3);
+  for (let b = 0; b < bats; b++) {
+    const bx = 220 + Math.floor(rnd() * 540);
+    const by = GROUND_Y - (100 + Math.floor(rnd() * 180));
+    const enemy = { type: "fly", x: bx, y: by, w: 22, h: 22, t: rnd() * 6, ampX: 40 + Math.floor(rnd() * 30), ampY: 25 + Math.floor(rnd() * 20), baseX: bx, baseY: by, speed: 1.5 + rnd() * 1.2 };
+    pushEnemySafe(L, enemy);
   }
+
   return L;
 }
 
-function genSky(i, rnd){
-  const L=makeLevelBase(`Level ${i} - Sky`);
+/* Sky (21-29) */
+function genSky(i, rnd) {
+  const L = makeLevelBase(`Level ${i} - Sky`);
   L.bg = "#1b2a49";
-  const steps = 4 + Math.floor(rnd()*3);
-  let px=180, py=GROUND_Y-120;
-  for(let s=0;s<steps;s++){
-    const pw=60+Math.floor(rnd()*50);
-    L.platforms.push({x:px,y:py,w:pw,h:12});
-    if(rnd()<0.7) L.coins.push({x:px+pw/2,y:py-28,r:10,collected:false});
-    py -= 50 + Math.floor(rnd()*60);
-    px += 80 + Math.floor(rnd()*90);
+
+  // Steps of platforms
+  const steps = 4 + Math.floor(rnd() * 3);
+  let px = 180;
+  let py = GROUND_Y - 120;
+  for (let s = 0; s < steps; s++) {
+    const pw = 60 + Math.floor(rnd() * 50);
+    L.platforms.push({ x: px, y: py, w: pw, h: 12 });
+    if (rnd() < 0.7) L.coins.push({ x: px + pw / 2, y: py - 28, r: 10, collected: false });
+    py -= 50 + Math.floor(rnd() * 60);
+    px += 80 + Math.floor(rnd() * 90);
   }
-  L.bouncePads.push({x:140+Math.floor(rnd()*180),y:GROUND_Y-16,w:40,h:16,power:900+Math.floor(rnd()*120)});
-  if(rnd()<0.6) L.enemies.push({type:"patrol",x:px-60,y:GROUND_Y-28,w:24,h:28,dir:-1,minX:px-140,maxX:px+30,speed:70});
+
+  // Bounce pad (non-lethal)
+  L.bouncePads.push({ x: 140 + Math.floor(rnd() * 180), y: GROUND_Y - 16, w: 40, h: 16, power: 900 + Math.floor(rnd() * 120) });
+
+  // Patrol enemy safely
+  if (rnd() < 0.6) {
+    const enemy = { type: "patrol", x: px - 60, y: GROUND_Y - 28, w: 24, h: 28, dir: -1, minX: px - 140, maxX: px + 30, speed: 70 };
+    pushEnemySafe(L, enemy);
+  }
+
   return L;
 }
 
-function genLava(i, rnd){
-  const L=makeLevelBase(`Level ${i} - Lava Fortress`);
+/* Lava Fortress (31-39) */
+function genLava(i, rnd) {
+  const L = makeLevelBase(`Level ${i} - Lava Fortress`);
   L.bg = "#3b1e1e";
-  const pools = 2 + Math.floor(rnd()*3);
-  for(let k=0;k<pools;k++){
-    L.hazards.push({x:220+k*120+Math.floor(rnd()*60),y:GROUND_Y-16,w:60+Math.floor(rnd()*90),h:16});
+
+  const pools = 2 + Math.floor(rnd() * 3);
+  for (let k = 0; k < pools; k++) {
+    const hazard = { x: 220 + k * 120 + Math.floor(rnd() * 60), y: GROUND_Y - 16, w: 60 + Math.floor(rnd() * 90), h: 16 };
+    pushHazardSafe(L, hazard);
   }
-  L.platforms.push({x:560+Math.floor(rnd()*80),y:GROUND_Y-120-Math.floor(rnd()*40),w:80+Math.floor(rnd()*50),h:12});
-  const chasers = 1 + Math.floor(rnd()*2);
-  for(let c=0;c<chasers;c++){
-    const ex=420+Math.floor(rnd()*300);
-    L.enemies.push({type:"chase",x:ex,y:GROUND_Y-28,w:24,h:28,speed:85+Math.floor(rnd()*40),range:240+Math.floor(rnd()*120)});
+
+  // Elevated platform
+  L.platforms.push({ x: 560 + Math.floor(rnd() * 80), y: GROUND_Y - 120 - Math.floor(rnd() * 40), w: 80 + Math.floor(rnd() * 50), h: 12 });
+
+  // Chasing enemies safely
+  const chasers = 1 + Math.floor(rnd() * 2);
+  for (let c = 0; c < chasers; c++) {
+    const ex = 420 + Math.floor(rnd() * 300);
+    const enemy = { type: "chase", x: ex, y: GROUND_Y - 28, w: 24, h: 28, speed: 85 + Math.floor(rnd() * 40), range: 240 + Math.floor(rnd() * 120) };
+    pushEnemySafe(L, enemy);
   }
-  if(rnd()<0.6) L.coins.push({x:600,y:GROUND_Y-140,r:10,collected:false});
+
+  // Coin reward
+  if (rnd() < 0.6) L.coins.push({ x: 600, y: GROUND_Y - 140, r: 10, collected: false });
+
   return L;
 }
 
-function genIce(i, rnd){
-  const L=makeLevelBase(`Level ${i} - Ice Peaks`);
-  L.bg = "#173e43"; L.friction = 0.5 + rnd()*0.15;
-  const shelves = 2 + Math.floor(rnd()*3);
-  for(let k=0;k<shelves;k++){
-    const px = 260 + Math.floor(rnd()*420);
-    const py = GROUND_Y - (100 + Math.floor(rnd()*120));
-    const pw = 90 + Math.floor(rnd()*80);
-    L.platforms.push({x:px,y:py,w:pw,h:12});
-    if(rnd()<0.5) L.coins.push({x:px+pw/2,y:py-26,r:10,collected:false});
+/* Ice Peaks (41-49) */
+function genIce(i, rnd) {
+  const L = makeLevelBase(`Level ${i} - Ice Peaks`);
+  L.bg = "#173e43";
+  L.friction = 0.5 + rnd() * 0.15;
+
+  const shelves = 2 + Math.floor(rnd() * 3);
+  for (let k = 0; k < shelves; k++) {
+    const px = 260 + Math.floor(rnd() * 420);
+    const py = GROUND_Y - (100 + Math.floor(rnd() * 120));
+    const pw = 90 + Math.floor(rnd() * 80);
+    L.platforms.push({ x: px, y: py, w: pw, h: 12 });
+    if (rnd() < 0.5) L.coins.push({ x: px + pw / 2, y: py - 26, r: 10, collected: false });
   }
-  if(rnd()<0.7) L.hazards.push({x:320+Math.floor(rnd()*300),y:GROUND_Y-16,w:60+Math.floor(rnd()*80),h:16});
-  L.enemies.push({type:"patrol",x:360+Math.floor(rnd()*240),y:GROUND_Y-28,w:24,h:28,dir:rnd()<0.5?-1:1,minX:300,maxX:620,speed:60+Math.floor(rnd()*30)});
+
+  // Floor hazard safely
+  if (rnd() < 0.7) {
+    const hazard = { x: 320 + Math.floor(rnd() * 300), y: GROUND_Y - 16, w: 60 + Math.floor(rnd() * 80), h: 16 };
+    pushHazardSafe(L, hazard);
+  }
+
+  // Patrol enemy safely
+  const enemy = { type: "patrol", x: 360 + Math.floor(rnd() * 240), y: GROUND_Y - 28, w: 24, h: 28, dir: rnd() < 0.5 ? -1 : 1, minX: 300, maxX: 620, speed: 60 + Math.floor(rnd() * 30) };
+  pushEnemySafe(L, enemy);
+
   return L;
 }
 
-function genFactory(i, rnd){
-  const L=makeLevelBase(`Level ${i} - Factory`);
+/* Factory (51-59) */
+function genFactory(i, rnd) {
+  const L = makeLevelBase(`Level ${i} - Factory`);
   L.bg = "#2c2c34";
-  L.conveyorZones.push({x:200,y:GROUND_Y-12,w:160,h:12,speed:120+Math.floor(rnd()*80)});
-  L.conveyorZones.push({x:420,y:GROUND_Y-12,w:160,h:12,speed:-120-Math.floor(rnd()*80)});
-  L.platforms.push({x:360+Math.floor(rnd()*140),y:GROUND_Y-120-Math.floor(rnd()*40),w:90+Math.floor(rnd()*60),h:12});
-  const turrets = 1 + Math.floor(rnd()*2);
-  for(let t=0;t<turrets;t++){
-    L.enemies.push({type:"turret",x:500+Math.floor(rnd()*120),y:GROUND_Y-48-Math.floor(rnd()*60),w:20,h:20,fire:0,rate:0.9+rnd()*0.6});
+
+  L.conveyorZones.push({ x: 200, y: GROUND_Y - 12, w: 160, h: 12, speed: 120 + Math.floor(rnd() * 80) });
+  L.conveyorZones.push({ x: 420, y: GROUND_Y - 12, w: 160, h: 12, speed: -120 - Math.floor(rnd() * 80) });
+
+  L.platforms.push({ x: 360 + Math.floor(rnd() * 140), y: GROUND_Y - 120 - Math.floor(rnd() * 40), w: 90 + Math.floor(rnd() * 60), h: 12 });
+
+  // Turrets safely
+  const turrets = 1 + Math.floor(rnd() * 2);
+  for (let t = 0; t < turrets; t++) {
+    const enemy = { type: "turret", x: 500 + Math.floor(rnd() * 120), y: GROUND_Y - 48 - Math.floor(rnd() * 60), w: 20, h: 20, fire: 0, rate: 0.9 + rnd() * 0.6 };
+    pushEnemySafe(L, enemy);
   }
-  if(rnd()<0.7) L.coins.push({x:380,y:GROUND_Y-140,r:10,collected:false});
+
+  if (rnd() < 0.7) L.coins.push({ x: 380, y: GROUND_Y - 140, r: 10, collected: false });
+
   return L;
 }
 
-function genHaunted(i, rnd){
-  const L=makeLevelBase(`Level ${i} - Haunted Ruins`);
-  L.bg = "#252038"; L.dark=true; L.flashlight=true;
-  L.platforms.push({x:240+Math.floor(rnd()*200),y:GROUND_Y-120-Math.floor(rnd()*40),w:100+Math.floor(rnd()*50),h:12});
-  L.door = {x:520+Math.floor(rnd()*40),y:GROUND_Y-72,w:24,h:72};
-  L.key = {x:260+Math.floor(rnd()*200),y:GROUND_Y-132,w:18,h:18, collected:false};
-  const ghosts = 1 + Math.floor(rnd()*2);
-  for(let g=0;g<ghosts;g++){
-    L.enemies.push({type:"ghost",x:400+Math.floor(rnd()*200),y:GROUND_Y-28,w:24,h:28,t:rnd()*3,visible:true});
+/* Haunted Ruins (61-69) */
+function genHaunted(i, rnd) {
+  const L = makeLevelBase(`Level ${i} - Haunted Ruins`);
+  L.bg = "#252038";
+  L.dark = true;
+  L.flashlight = true;
+
+  L.platforms.push({ x: 240 + Math.floor(rnd() * 200), y: GROUND_Y - 120 - Math.floor(rnd() * 40), w: 100 + Math.floor(rnd() * 50), h: 12 });
+
+  // Locked door and key (non-lethal)
+  L.door = { x: 520 + Math.floor(rnd() * 40), y: GROUND_Y - 72, w: 24, h: 72 };
+  L.key = { x: 260 + Math.floor(rnd() * 200), y: GROUND_Y - 132, w: 18, h: 18, collected: false };
+
+  // Ghosts safely
+  const ghosts = 1 + Math.floor(rnd() * 2);
+  for (let g = 0; g < ghosts; g++) {
+    const enemy = { type: "ghost", x: 400 + Math.floor(rnd() * 200), y: GROUND_Y - 28, w: 24, h: 28, t: rnd() * 3, visible: true };
+    pushEnemySafe(L, enemy);
   }
-  if(rnd()<0.6) L.coins.push({x:540,y:GROUND_Y-90,r:10,collected:false});
+
+  if (rnd() < 0.6) L.coins.push({ x: 540, y: GROUND_Y - 90, r: 10, collected: false });
+
   return L;
 }
 
-function genJungle(i, rnd){
-  const L=makeLevelBase(`Level ${i} - Jungle`);
+/* Jungle (71-79) */
+function genJungle(i, rnd) {
+  const L = makeLevelBase(`Level ${i} - Jungle`);
   L.bg = "#1f3a2d";
-  L.platforms.push({x:220+Math.floor(rnd()*160),y:GROUND_Y-110-Math.floor(rnd()*40),w:90+Math.floor(rnd()*40),h:12,vx:(rnd()<0.5?70:-70),vy:0,minX:180,maxX:360});
-  L.platforms.push({x:420+Math.floor(rnd()*160),y:GROUND_Y-190-Math.floor(rnd()*40),w:90+Math.floor(rnd()*40),h:12,vy:(rnd()<0.5?70:-70),minY:GROUND_Y-250,maxY:GROUND_Y-130});
-  const hidden = rnd()<0.5;
-  L.coins.push({x:hidden? (220+Math.floor(rnd()*160)) : (440+Math.floor(rnd()*180)), y:hidden? (GROUND_Y-130) : (GROUND_Y-210), r:10, collected:false});
-  L.enemies.push({type:"patrol",x:300+Math.floor(rnd()*160),y:GROUND_Y-28,w:24,h:28,dir:1,minX:260,maxX:360,speed:70});
+
+  L.platforms.push({
+    x: 220 + Math.floor(rnd() * 160), y: GROUND_Y - 110 - Math.floor(rnd() * 40),
+    w: 90 + Math.floor(rnd() * 40), h: 12,
+    vx: rnd() < 0.5 ? 70 : -70, vy: 0, minX: 180, maxX: 360
+  });
+
+  L.platforms.push({
+    x: 420 + Math.floor(rnd() * 160), y: GROUND_Y - 190 - Math.floor(rnd() * 40),
+    w: 90 + Math.floor(rnd() * 40), h: 12,
+    vy: rnd() < 0.5 ? 70 : -70, minY: GROUND_Y - 250, maxY: GROUND_Y - 130
+  });
+
+  const hidden = rnd() < 0.5;
+  L.coins.push({ x: hidden ? 220 + Math.floor(rnd() * 160) : 440 + Math.floor(rnd() * 180), y: hidden ? GROUND_Y - 130 : GROUND_Y - 210, r: 10, collected: false });
+
+  // Patrol safely
+  const enemy = { type: "patrol", x: 300 + Math.floor(rnd() * 160), y: GROUND_Y - 28, w: 24, h: 28, dir: 1, minX: 260, maxX: 360, speed: 70 };
+  pushEnemySafe(L, enemy);
+
   return L;
 }
 
-function genSpace(i, rnd){
-  const L=makeLevelBase(`Level ${i} - Space`);
-  L.bg = "#0a0f1d"; L.lowGravity=true;
-  L.platforms.push({x:260+Math.floor(rnd()*160),y:GROUND_Y-160-Math.floor(rnd()*60),w:90+Math.floor(rnd()*60),h:12});
-  L.platforms.push({x:420+Math.floor(rnd()*160),y:GROUND_Y-230-Math.floor(rnd()*60),w:90+Math.floor(rnd()*60),h:12});
-  L.hazards.push({x:320+Math.floor(rnd()*180),y:GROUND_Y-16,w:70+Math.floor(rnd()*80),h:16});
-  L.enemies.push({type:"fly",x:480+Math.floor(rnd()*100),y:GROUND_Y-160-Math.floor(rnd()*60),w:22,h:22,t:rnd()*6,ampX:60,ampY:40,baseX:480,baseY:GROUND_Y-160,speed:1.2+rnd()*0.8});
-  L.coins.push({x:420+Math.floor(rnd()*160),y:GROUND_Y-250-Math.floor(rnd()*40),r:10,collected:false});
+/* Space (81-89) */
+function genSpace(i, rnd) {
+  const L = makeLevelBase(`Level ${i} - Space`);
+  L.bg = "#0a0f1d";
+  L.lowGravity = true;
+
+  L.platforms.push({ x: 260 + Math.floor(rnd() * 160), y: GROUND_Y - 160 - Math.floor(rnd() * 60), w: 90 + Math.floor(rnd() * 60), h: 12 });
+  L.platforms.push({ x: 420 + Math.floor(rnd() * 160), y: GROUND_Y - 230 - Math.floor(rnd() * 60), w: 90 + Math.floor(rnd() * 60), h: 12 });
+
+  // Floating hazard safely
+  const hazard = { x: 320 + Math.floor(rnd() * 180), y: GROUND_Y - 16, w: 70 + Math.floor(rnd() * 80), h: 16 };
+  pushHazardSafe(L, hazard);
+
+  // Flying enemy safely
+  const enemy = { type: "fly", x: 480 + Math.floor(rnd() * 100), y: GROUND_Y - 160 - Math.floor(rnd() * 60), w: 22, h: 22, t: rnd() * 6, ampX: 60, ampY: 40, baseX: 480, baseY: GROUND_Y - 160, speed: 1.2 + rnd() * 0.8 };
+  pushEnemySafe(L, enemy);
+
+  L.coins.push({ x: 420 + Math.floor(rnd() * 160), y: GROUND_Y - 250 - Math.floor(rnd() * 40), r: 10, collected: false });
+
   return L;
 }
 
-// Boss generator introduces world-specific new obstacle
-function genBoss(i, rnd){
-  const world = Math.floor((i-1)/10)+1;
-  const L=makeLevelBase(`Level ${i} - Boss`);
-  L.bg="#2a1f1f"; L.boss=true; L.goal=null;
-  const hp = 6 + Math.floor(world/2);
-  L.enemies.push({type:"boss",x:520,y:GROUND_Y-80,w:100,h:100,hp:hp,fire:0,rate:Math.max(0.55,1.0-0.05*world)});
-  if(world===1){ L.platforms.push({x:360,y:GROUND_Y-120,w:110,h:12}); }
-  else if(world===2){ L.dark=true; L.flashlight=true; L.breakables.push({x:420,y:GROUND_Y-132,w:60,h:12,broken:false}); }
-  else if(world===3){ L.bouncePads.push({x:280,y:GROUND_Y-16,w:50,h:16,power:980}); }
-  else if(world===4){ L.hazards.push({x:340,y:GROUND_Y-16,w:110,h:16}); }
-  else if(world===5){ L.friction = 0.55; L.platforms.push({x:420,y:GROUND_Y-120,w:110,h:12}); }
-  else if(world===6){ L.conveyorZones.push({x:260,y:GROUND_Y-12,w:180,h:12,speed:160}); }
-  else if(world===7){ L.dark=true; L.flashlight=true; L.door={x:520,y:GROUND_Y-72,w:24,h:72}; L.key={x:300,y:GROUND_Y-132,w:18,h:18, collected:false}; }
-  else if(world===8){ L.platforms.push({x:380,y:GROUND_Y-160,w:100,h:12,vy:70,minY:GROUND_Y-220,maxY:GROUND_Y-120}); }
-  else if(world===9){ L.lowGravity=true; L.hazards.push({x:360,y:GROUND_Y-16,w:120,h:16}); }
-  else { L.lowGravity=true; L.dark=true; L.flashlight=true; L.conveyorZones.push({x:280,y:GROUND_Y-12,w:160,h:12,speed:-170}); L.bouncePads.push({x:460,y:GROUND_Y-16,w:50,h:16,power:1000}); }
+/* Boss per world (10,20,30...) with safe placement */
+function genBoss(i, rnd) {
+  const world = Math.floor((i - 1) / 10) + 1;
+  const L = makeLevelBase(`Level ${i} - Boss`);
+  L.bg = "#2a1f1f";
+  L.boss = true;
+  L.goal = null;
+
+  const hp = 6 + Math.floor(world / 2);
+  const boss = { type: "boss", x: 520, y: GROUND_Y - 80, w: 100, h: 100, hp, fire: 0, rate: Math.max(0.55, 1.0 - 0.05 * world) };
+  pushEnemySafe(L, boss);
+
+  // World-specific flavor (non-lethal or safe hazards)
+  if (world === 1) {
+    L.platforms.push({ x: 360, y: GROUND_Y - 120, w: 110, h: 12 });
+  } else if (world === 2) {
+    L.dark = true; L.flashlight = true;
+    L.breakables.push({ x: 420, y: GROUND_Y - 132, w: 60, h: 12, broken: false });
+  } else if (world === 3) {
+    L.bouncePads.push({ x: 280, y: GROUND_Y - 16, w: 50, h: 16, power: 980 });
+  } else if (world === 4) {
+    pushHazardSafe(L, { x: 340, y: GROUND_Y - 16, w: 110, h: 16 });
+  } else if (world === 5) {
+    L.friction = 0.55;
+    L.platforms.push({ x: 420, y: GROUND_Y - 120, w: 110, h: 12 });
+  } else if (world === 6) {
+    L.conveyorZones.push({ x: 260, y: GROUND_Y - 12, w: 180, h: 12, speed: 160 });
+  } else if (world === 7) {
+    L.dark = true; L.flashlight = true;
+    L.door = { x: 520, y: GROUND_Y - 72, w: 24, h: 72 };
+    L.key = { x: 300, y: GROUND_Y - 132, w: 18, h: 18, collected: false };
+  } else if (world === 8) {
+    L.platforms.push({ x: 380, y: GROUND_Y - 160, w: 100, h: 12, vy: 70, minY: GROUND_Y - 220, maxY: GROUND_Y - 120 });
+  } else if (world === 9) {
+    L.lowGravity = true;
+    pushHazardSafe(L, { x: 360, y: GROUND_Y - 16, w: 120, h: 16 });
+  } else {
+    L.lowGravity = true; L.dark = true; L.flashlight = true;
+    L.conveyorZones.push({ x: 280, y: GROUND_Y - 12, w: 160, h: 12, speed: -170 });
+    L.bouncePads.push({ x: 460, y: GROUND_Y - 16, w: 50, h: 16, power: 1000 });
+  }
+
   return L;
 }
 
-// Generate a specific level on demand
-function generateLevel(i){
-  const rnd = makePRNG(i*98765 + 12345);
-  if(i%10===0) return genBoss(i, rnd);
-  if(i<=10) return genGrasslands(i, rnd);
-  if(i<=20) return genCaves(i, rnd);
-  if(i<=30) return genSky(i, rnd);
-  if(i<=40) return genLava(i, rnd);
-  if(i<=50) return genIce(i, rnd);
-  if(i<=60) return genFactory(i, rnd);
-  if(i<=70) return genHaunted(i, rnd);
-  if(i<=80) return genJungle(i, rnd);
+/* ============================================================
+   Level generation by index
+   ============================================================ */
+function generateLevel(i) {
+  const rnd = makePRNG(i * 98765 + 12345);
+  if (i === 1) return genTutorial();
+  if (i % 10 === 0) return genBoss(i, rnd);
+  if (i <= 10) return genGrasslands(i, rnd);
+  if (i <= 20) return genCaves(i, rnd);
+  if (i <= 30) return genSky(i, rnd);
+  if (i <= 40) return genLava(i, rnd);
+  if (i <= 50) return genIce(i, rnd);
+  if (i <= 60) return genFactory(i, rnd);
+  if (i <= 70) return genHaunted(i, rnd);
+  if (i <= 80) return genJungle(i, rnd);
   return genSpace(i, rnd); // 81-99
 }
 
-// Load/reset
-function loadLevel(idx){
-  levelIndex = ((idx-1)%100)+1; // keep within 1..100
+/* ============================================================
+   Load/reset and death handling with invulnerability
+   ============================================================ */
+function loadLevel(idx) {
+  levelIndex = ((idx - 1) % 100) + 1;
   level = generateLevel(levelIndex);
   hasKey = false;
-  player.x = 64; player.y = GROUND_Y-28; player.vx=0; player.vy=0; player.jumps=0; player.onGround=false; player.face=1;
+
+  player.x = 64;
+  player.y = GROUND_Y - 28;
+  player.vx = 0;
+  player.vy = 0;
+  player.jumps = 0;
+  player.onGround = false;
+  player.face = 1;
+
   bullets.length = 0;
   setHUD(level.name);
   document.getElementById("skipBtn").style.display = level.boss ? "block" : "none";
 }
+function killPlayer() {
+  loadLevel(levelIndex);  // reset current level
+  invulnerable = true;    // enable 1 second invulnerability
+  invulnTimer = 1.0;
+}
 loadLevel(1);
-document.getElementById("skipBtn").onclick = ()=> loadLevel(levelIndex+1);
+document.getElementById("skipBtn").onclick = () => loadLevel(levelIndex + 1);
 
-// Update
-function update(dt){
+/* ============================================================
+   Update loop
+   ============================================================ */
+function update(dt) {
   const L = level;
   const gravity = L.lowGravity ? 520 : 1000;
   const baseSpeed = 240;
   const friction = L.friction || 1.0;
 
+  // Input and movement
   const left = keys["ArrowLeft"] || keys["KeyA"] || moveVec.x < -0.2;
   const right = keys["ArrowRight"] || keys["KeyD"] || moveVec.x > 0.2;
-  if(left && !right){ player.vx = -baseSpeed * friction; player.face=-1; }
-  else if(right && !left){ player.vx = baseSpeed * friction; player.face=1; }
-  else player.vx *= 0.85 * friction;
+  if (left && !right) {
+    player.vx = -baseSpeed * friction; player.face = -1;
+  } else if (right && !left) {
+    player.vx = baseSpeed * friction; player.face = 1;
+  } else {
+    player.vx *= 0.85 * friction;
+  }
+  if (keys["Space"] || keys["ArrowUp"] || keys["KeyW"]) tryJump();
 
-  if(keys["Space"] || keys["ArrowUp"] || keys["KeyW"]) tryJump();
-
+  // Gravity
   player.vy += gravity * dt;
 
-  for(const z of L.conveyorZones){
-    if(onTopOf(player.x,player.y,player.w,player.h,z.x,z.y,z.w,z.h)) player.x += z.speed * dt;
+  // Conveyors
+  for (const z of L.conveyorZones) {
+    if (onTopOf(player.x, player.y, player.w, player.h, z.x, z.y, z.w, z.h)) {
+      player.x += z.speed * dt;
+    }
   }
 
+  // Apply movement
   player.x += player.vx * dt;
   player.y += player.vy * dt;
 
   // Ground
-  if(player.y + player.h > GROUND_Y){
-    player.y = GROUND_Y - player.h; player.vy = 0; player.onGround=true; player.jumps=0;
-  } else player.onGround=false;
+  if (player.y + player.h > GROUND_Y) {
+    player.y = GROUND_Y - player.h;
+    player.vy = 0;
+    player.onGround = true;
+    player.jumps = 0;
+  } else {
+    player.onGround = false;
+  }
 
-  // Platforms movement and landing
-  for(const p of L.platforms){
-    if(p.vx){ p.x += p.vx * dt; if(p.minX!==undefined && (p.x<p.minX || p.x>p.maxX)) p.vx*=-1; }
-    if(p.vy){ p.y += p.vy * dt; if(p.minY!==undefined && (p.y<p.minY || p.y>p.maxY)) p.vy*=-1; }
-    if(onTopOf(player.x,player.y,player.w,player.h,p.x,p.y,p.w,p.h)){
-      player.y = p.y - player.h; player.vy = 0; player.onGround=true; player.jumps=0;
+  // Platform movement and landing
+  for (const p of L.platforms) {
+    if (p.vx) {
+      p.x += p.vx * dt;
+      if (p.minX !== undefined && (p.x < p.minX || p.x > p.maxX)) p.vx *= -1;
+    }
+    if (p.vy) {
+      p.y += p.vy * dt;
+      if (p.minY !== undefined && (p.y < p.minY || p.y > p.maxY)) p.vy *= -1;
+    }
+
+    if (onTopOf(player.x, player.y, player.w, player.h, p.x, p.y, p.w, p.h)) {
+      player.y = p.y - player.h;
+      player.vy = 0;
+      player.onGround = true;
+      player.jumps = 0;
     }
   }
 
-  for(const b of L.bouncePads){
-    if(onTopOf(player.x,player.y,player.w,player.h,b.x,b.y,b.w,b.h)){ player.vy = -b.power; player.onGround=false; }
+  // Bounce pads
+  for (const b of L.bouncePads) {
+    if (onTopOf(player.x, player.y, player.w, player.h, b.x, b.y, b.w, b.h)) {
+      player.vy = -b.power;
+      player.onGround = false;
+    }
   }
 
-  for(const br of L.breakables){
-    if(!br.broken && onTopOf(player.x,player.y,player.w,player.h,br.x,br.y,br.w,br.h)){
-      br.broken = true; player.onGround=false; player.vy = Math.max(player.vy, 50);
+  // Breakables
+  for (const br of L.breakables) {
+    if (!br.broken && onTopOf(player.x, player.y, player.w, player.h, br.x, br.y, br.w, br.h)) {
+      br.broken = true; player.onGround = false; player.vy = Math.max(player.vy, 50);
     }
   }
 
   // Door/key
-  if(L.key && !L.key.collected && aabb(player.x,player.y,player.w,player.h,L.key.x,L.key.y,L.key.w,L.key.h)){ L.key.collected = true; hasKey = true; }
-  if(L.door && aabb(player.x,player.y,player.w,player.h,L.door.x,L.door.y,L.door.w,L.door.h) && !hasKey){
-    if(player.x + player.w/2 < L.door.x + L.door.w/2) player.x = L.door.x - player.w; else player.x = L.door.x + L.door.w; player.vx = 0;
+  if (L.key && !L.key.collected && aabb(player.x, player.y, player.w, player.h, L.key.x, L.key.y, L.key.w, L.key.h)) {
+    L.key.collected = true; hasKey = true;
+  }
+  if (L.door) {
+    if (aabb(player.x, player.y, player.w, player.h, L.door.x, L.door.y, L.door.w, L.door.h)) {
+      if (!hasKey) {
+        if (player.x + player.w / 2 < L.door.x + L.door.w / 2) player.x = L.door.x - player.w;
+        else player.x = L.door.x + L.door.w;
+        player.vx = 0;
+      }
+    }
   }
 
-  // Hazards
-  for(const h of L.hazards){ if(aabb(player.x,player.y,player.w,player.h,h.x,h.y,h.w,h.h)){ loadLevel(levelIndex); return; } }
+  // Invulnerability countdown
+  if (invulnerable) {
+    invulnTimer -= dt;
+    if (invulnTimer <= 0) invulnerable = false;
+  }
+
+  // Hazards (skip if invulnerable)
+  if (!invulnerable) {
+    for (const h of L.hazards) {
+      if (aabb(player.x, player.y, player.w, player.h, h.x, h.y, h.w, h.h)) {
+        killPlayer();
+        return;
+      }
+    }
+  }
 
   // Coins
-  for(const c of L.coins){
-    if(!c.collected && aabb(player.x,player.y,player.w,player.h,c.x-c.r,c.y-c.r,c.r*2,c.r*2)){ c.collected = true; coinTotal++; setHUD(L.name); }
+  for (const c of L.coins) {
+    if (!c.collected && aabb(player.x, player.y, player.w, player.h, c.x - c.r, c.y - c.r, c.r * 2, c.r * 2)) {
+      c.collected = true;
+      coinTotal++;
+      setHUD(L.name);
+    }
   }
 
-  // Enemies
-  for(const e of L.enemies){
-    if(e.type==="patrol"){
-      e.x += (e.dir*e.speed*dt);
-      if(e.x<e.minX){ e.x=e.minX; e.dir*=-1; }
-      if(e.x+e.w>e.maxX){ e.x=e.maxX-e.w; e.dir*=-1; }
-    } else if(e.type==="fly"){
-      e.t += e.speed*dt; e.x = e.baseX + Math.sin(e.t)*e.ampX; e.y = e.baseY + Math.cos(e.t*0.9)*e.ampY;
-    } else if(e.type==="chase"){
-      const dx = player.x - e.x; if(Math.abs(dx) < e.range) e.x += Math.sign(dx) * e.speed * dt;
-    } else if(e.type==="ghost"){
-      e.t += dt; e.visible = Math.floor(e.t % 2)===0;
-    } else if(e.type==="turret"){
-      e.fire = (e.fire||0) + dt;
-      if(e.fire >= (e.rate||1)){
+  // Enemies and AI
+  for (const e of L.enemies) {
+    if (e.type === "patrol") {
+      e.x += e.dir * e.speed * dt;
+      if (e.x < e.minX) { e.x = e.minX; e.dir *= -1; }
+      if (e.x + e.w > e.maxX) { e.x = e.maxX - e.w; e.dir *= -1; }
+    } else if (e.type === "fly") {
+      e.t += e.speed * dt;
+      e.x = e.baseX + Math.sin(e.t) * e.ampX;
+      e.y = e.baseY + Math.cos(e.t * 0.9) * e.ampY;
+    } else if (e.type === "chase") {
+      const dx = player.x - e.x;
+      if (Math.abs(dx) < e.range) e.x += Math.sign(dx) * e.speed * dt;
+    } else if (e.type === "ghost") {
+      e.t += dt;
+      e.visible = Math.floor(e.t % 2) === 0;
+    } else if (e.type === "turret") {
+      e.fire = (e.fire || 0) + dt;
+      if (e.fire >= (e.rate || 1)) {
         e.fire = 0;
-        const bx = e.x + e.w/2, by = e.y + e.h/2;
-        const dx = player.x + player.w/2 - bx, dy = player.y + player.h/2 - by;
-        const len = Math.max(1, Math.hypot(dx,dy));
-        bullets.push({x:bx,y:by,w:6,h:6,vx:(dx/len)*270,vy:(dy/len)*270,ttl:4,color:"#ffcc00"});
+        // Spawn turret bullet safely relative to start
+        const bx = e.x + e.w / 2, by = e.y + e.h / 2;
+        const dx = player.x + player.w / 2 - bx;
+        const dy = player.y + player.h / 2 - by;
+        const len = Math.max(1, Math.hypot(dx, dy));
+        const b = { x: bx, y: by, w: 6, h: 6, vx: (dx / len) * 270, vy: (dy / len) * 270, ttl: 4, color: "#ffcc00" };
+        pushBulletSafe(b);
       }
-    } else if(e.type==="boss"){
-      e.fire = (e.fire||0) + dt;
-      if(e.fire >= (e.rate||0.9)){
+    } else if (e.type === "boss") {
+      e.fire = (e.fire || 0) + dt;
+      if (e.fire >= (e.rate || 0.9)) {
         e.fire = 0;
-        const N = 8 + Math.floor(Math.random()*4);
-        for(let k=0;k<N;k++){
-          const ang = (k/N)*Math.PI*2;
-          bullets.push({x:e.x+e.w/2,y:e.y+e.h/2,w:8,h:8,vx:Math.cos(ang)*230,vy:Math.sin(ang)*230,ttl:5,color:"#ff6666"});
+        const N = 8 + Math.floor(Math.random() * 4);
+        for (let k = 0; k < N; k++) {
+          const ang = (k / N) * Math.PI * 2;
+          const b = { x: e.x + e.w / 2, y: e.y + e.h / 2, w: 8, h: 8, vx: Math.cos(ang) * 230, vy: Math.sin(ang) * 230, ttl: 5, color: "#ff6666" };
+          pushBulletSafe(b);
         }
       }
     }
 
-    // Collisions with player
-    if(e.type==="ghost"){
-      if(e.visible && aabb(player.x,player.y,player.w,player.h,e.x,e.y,e.w,e.h)){ loadLevel(levelIndex); return; }
-    } else if(e.type==="boss"){
-      const stomping = player.vy>0 && (player.y+player.h) <= (e.y+12) && aabb(player.x,player.y,player.w,player.h,e.x,e.y,e.w,e.h);
-      if(stomping){
-        player.vy = -540; e.hp--; if(e.hp<=0){ coinTotal += L.bossReward; loadLevel(levelIndex+1); return; }
-      } else if(aabb(player.x,player.y,player.w,player.h,e.x,e.y,e.w,e.h)){ loadLevel(levelIndex); return; }
-    } else {
-      if(aabb(player.x,player.y,player.w,player.h,e.x,e.y,e.w,e.h)){ loadLevel(levelIndex); return; }
+    // Collisions with player (skip if invulnerable)
+    if (!invulnerable) {
+      if (e.type === "ghost") {
+        if (e.visible && aabb(player.x, player.y, player.w, player.h, e.x, e.y, e.w, e.h)) { killPlayer(); return; }
+      } else if (e.type === "boss") {
+        const stomping = player.vy > 0 && player.y + player.h <= e.y + 12 && aabb(player.x, player.y, player.w, player.h, e.x, e.y, e.w, e.h);
+        if (stomping) {
+          player.vy = -540;
+          e.hp--;
+          if (e.hp <= 0) {
+            coinTotal += L.bossReward;
+            loadLevel(levelIndex + 1);
+            return;
+          }
+        } else if (aabb(player.x, player.y, player.w, player.h, e.x, e.y, e.w, e.h)) {
+          killPlayer();
+          return;
+        }
+      } else {
+        if (aabb(player.x, player.y, player.w, player.h, e.x, e.y, e.w, e.h)) { killPlayer(); return; }
+      }
     }
   }
 
-  // Bullets
-  for(let i=bullets.length-1;i>=0;i--){
-    const b = bullets[i]; b.x += b.vx * dt; b.y += b.vy * dt; b.ttl -= dt;
-    if(aabb(player.x,player.y,player.w,player.h,b.x,b.y,b.w,b.h)){ loadLevel(levelIndex); return; }
-    if(b.ttl<=0) bullets.splice(i,1);
+  // Bullets update (skip collision if invulnerable)
+  for (let i = bullets.length - 1; i >= 0; i--) {
+    const b = bullets[i];
+    b.x += b.vx * dt;
+    b.y += b.vy * dt;
+    b.ttl -= dt;
+    if (!invulnerable && aabb(player.x, player.y, player.w, player.h, b.x, b.y, b.w, b.h)) {
+      killPlayer();
+      return;
+    }
+    if (b.ttl <= 0) bullets.splice(i, 1);
   }
 
-  // Goal advance
-  if(!L.boss && L.goal && aabb(player.x,player.y,player.w,player.h,L.goal.x,L.goal.y,L.goal.w,L.goal.h)){ loadLevel(levelIndex+1); return; }
+  // Goal
+  if (!L.boss && L.goal) {
+    if (aabb(player.x, player.y, player.w, player.h, L.goal.x, L.goal.y, L.goal.w, L.goal.h)) {
+      loadLevel(levelIndex + 1);
+      return;
+    }
+  }
 }
 
-// Draw
-function draw(){
+/* ============================================================
+   Draw loop
+   ============================================================ */
+function draw() {
   const L = level;
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  ctx.fillStyle = L.bg; ctx.fillRect(0,0,canvas.width,canvas.height);
-  ctx.fillStyle = "#555"; ctx.fillRect(0,GROUND_Y,canvas.width,4);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Background
+  ctx.fillStyle = L.bg;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Ground line
+  ctx.fillStyle = "#555";
+  ctx.fillRect(0, GROUND_Y, canvas.width, 4);
 
   // Hazards
   ctx.fillStyle = "#d84315";
-  for(const h of L.hazards){ ctx.fillRect(h.x,h.y,h.w,h.h); }
+  for (const h of L.hazards) {
+    ctx.fillRect(h.x, h.y, h.w, h.h);
+  }
 
   // Breakables
-  for(const br of L.breakables){ ctx.fillStyle = br.broken ? "rgba(120,90,60,0.25)" : "#8d6e63"; ctx.fillRect(br.x,br.y,br.w,br.h); }
+  for (const br of L.breakables) {
+    ctx.fillStyle = br.broken ? "rgba(120,90,60,0.25)" : "#8d6e63";
+    ctx.fillRect(br.x, br.y, br.w, br.h);
+  }
 
   // Platforms
   ctx.fillStyle = "#90a4ae";
-  for(const p of L.platforms){ ctx.fillRect(p.x,p.y,p.w,p.h); }
+  for (const p of L.platforms) {
+    ctx.fillRect(p.x, p.y, p.w, p.h);
+  }
 
   // Bounce pads
   ctx.fillStyle = "#7cb342";
-  for(const b of L.bouncePads){ ctx.fillRect(b.x,b.y,b.w,b.h); }
+  for (const b of L.bouncePads) {
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+  }
 
-  // Conveyors
+  // Conveyor zones
   ctx.fillStyle = "rgba(200,200,255,0.22)";
-  for(const z of L.conveyorZones){ ctx.fillRect(z.x,z.y,z.w,z.h); }
+  for (const z of L.conveyorZones) {
+    ctx.fillRect(z.x, z.y, z.w, z.h);
+  }
 
-  // Door/key
-  if(L.door){ ctx.fillStyle = hasKey ? "#4caf50" : "#6d4c41"; ctx.fillRect(L.door.x,L.door.y,L.door.w,L.door.h); }
-  if(L.key && !L.key.collected){ ctx.fillStyle = "#cddc39"; ctx.fillRect(L.key.x,L.key.y,L.key.w,L.key.h); }
+  // Door and key
+  if (L.door) {
+    ctx.fillStyle = hasKey ? "#4caf50" : "#6d4c41";
+    ctx.fillRect(L.door.x, L.door.y, L.door.w, L.door.h);
+  }
+  if (L.key && !L.key.collected) {
+    ctx.fillStyle = "#cddc39";
+    ctx.fillRect(L.key.x, L.key.y, L.key.w, L.key.h);
+  }
 
   // Goal
-  if(!L.boss && L.goal){ ctx.fillStyle = "#1e88e5"; ctx.fillRect(L.goal.x,L.goal.y,L.goal.w,L.goal.h); }
+  if (!L.boss && L.goal) {
+    ctx.fillStyle = "#1e88e5";
+    ctx.fillRect(L.goal.x, L.goal.y, L.goal.w, L.goal.h);
+  }
 
   // Coins
-  for(const c of L.coins){ if(!c.collected){ ctx.fillStyle = "#ffd700"; ctx.beginPath(); ctx.arc(c.x,c.y,c.r,0,Math.PI*2); ctx.fill(); } }
+  for (const c of L.coins) {
+    if (!c.collected) {
+      ctx.fillStyle = "#ffd700";
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
 
   // Enemies
-  for(const e of L.enemies){
+  for (const e of L.enemies) {
     let color = "#ff4444";
-    if(e.type==="fly") color="#ff8a65";
-    if(e.type==="chase") color="#f44336";
-    if(e.type==="ghost") color = (e.visible?"#9c27b0":"rgba(156,39,176,0.3)");
-    if(e.type==="turret") color="#b0bec5";
-    if(e.type==="boss") color="#e53935";
-    ctx.fillStyle = color; ctx.fillRect(e.x,e.y,e.w,e.h);
-    if(e.type==="boss"){
-      ctx.fillStyle="#222"; ctx.fillRect(e.x,e.y-10,e.w,6);
+    if (e.type === "fly") color = "#ff8a65";
+    if (e.type === "chase") color = "#f44336";
+    if (e.type === "ghost") color = e.visible ? "#9c27b0" : "rgba(156,39,176,0.3)";
+    if (e.type === "turret") color = "#b0bec5";
+    if (e.type === "boss") color = "#e53935";
+    ctx.fillStyle = color;
+    ctx.fillRect(e.x, e.y, e.w, e.h);
+
+    if (e.type === "boss") {
+      // Boss HP bar (visual only)
+      ctx.fillStyle = "#222";
+      ctx.fillRect(e.x, e.y - 10, e.w, 6);
       const maxHp = Math.max(e.hp, 12);
-      ctx.fillStyle="#76ff03"; ctx.fillRect(e.x,e.y-10,(Math.max(0,e.hp)/maxHp)*e.w,6);
+      ctx.fillStyle = "#76ff03";
+      ctx.fillRect(e.x, e.y - 10, (Math.max(0, e.hp) / maxHp) * e.w, 6);
     }
   }
 
   // Bullets
-  for(const b of bullets){ ctx.fillStyle = b.color || "#fff"; ctx.fillRect(b.x,b.y,b.w,b.h); }
+  for (const b of bullets) {
+    ctx.fillStyle = b.color || "#fff";
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+  }
 
   // Player
-  ctx.fillStyle = player.color; ctx.fillRect(player.x,player.y,player.w,player.h);
+  ctx.fillStyle = player.color;
+  ctx.fillRect(player.x, player.y, player.w, player.h);
 
-  // Darkness / flashlight for caves/haunted
-  if(L.dark && L.flashlight){
+  // Darkness overlay and flashlight cone
+  if (L.dark && L.flashlight) {
     ctx.save();
-    ctx.fillStyle="rgba(0,0,0,0.92)";
-    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle = "rgba(0,0,0,0.92)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    const cx = player.x + player.w/2, cy = player.y + player.h/2;
-    const angle = player.face===1 ? 0 : Math.PI;
-    const spread = Math.PI/4;
+    const cx = player.x + player.w / 2;
+    const cy = player.y + player.h / 2;
+    const angle = player.face === 1 ? 0 : Math.PI;
+    const spread = Math.PI / 4;
     const radius = 240;
 
-    ctx.globalCompositeOperation="destination-out";
-    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, radius, angle - spread, angle + spread); ctx.closePath(); ctx.fill();
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, radius, angle - spread, angle + spread);
+    ctx.closePath();
+    ctx.fill();
 
     const glowR = 110;
-    const grad = ctx.createRadialGradient(cx,cy,0,cx,cy,glowR);
-    grad.addColorStop(0,"rgba(0,0,0,0)"); grad.addColorStop(1,"rgba(0,0,0,0.92)");
-    ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(cx,cy,glowR,0,Math.PI*2); ctx.fill();
+    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, glowR);
+    grad.addColorStop(0, "rgba(0,0,0,0)");
+    grad.addColorStop(1, "rgba(0,0,0,0.92)");
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, glowR, 0, Math.PI * 2);
+    ctx.fill();
 
     ctx.restore();
-  } else if(L.dark){
+  } else if (L.dark) {
     ctx.save();
-    ctx.fillStyle="rgba(0,0,0,0.85)"; ctx.fillRect(0,0,canvas.width,canvas.height);
-    const cx=player.x+player.w/2, cy=player.y+player.h/2, r=130;
-    const grad=ctx.createRadialGradient(cx,cy,0,cx,cy,r);
-    grad.addColorStop(0,"rgba(0,0,0,0)"); grad.addColorStop(1,"rgba(0,0,0,0.85)");
-    ctx.globalCompositeOperation="destination-out";
-    ctx.fillStyle=grad; ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle = "rgba(0,0,0,0.85)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const cx = player.x + player.w / 2;
+    const cy = player.y + player.h / 2;
+    const r = 130;
+    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+    grad.addColorStop(0, "rgba(0,0,0,0)");
+    grad.addColorStop(1, "rgba(0,0,0,0.85)");
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // Visual cue when invulnerable (brief white outline)
+  if (invulnerable) {
+    ctx.save();
+    ctx.strokeStyle = "rgba(255,255,255,0.8)";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(player.x - 2, player.y - 2, player.w + 4, player.h + 4);
     ctx.restore();
   }
 }
 
-// Loop
+/* ============================================================
+   Game loop
+   ============================================================ */
 let last = performance.now();
-function loop(now){ const dt = Math.min(0.033, (now-last)/1000); last = now; update(dt); draw(); requestAnimationFrame(loop); }
+function loop(now) {
+  const dt = Math.min(0.033, (now - last) / 1000);
+  last = now;
+  update(dt);
+  draw();
+  requestAnimationFrame(loop);
+}
 requestAnimationFrame(loop);
 
-// Skip boss button
-document.getElementById("skipBtn").style.display = "none";
-document.getElementById("skipBtn").onclick = ()=> loadLevel(levelIndex+1);
-
-// Color swap
-window.addEventListener('keydown',e=>{
-  if(e.code==="Digit1") player.color="#ffd166";
-  if(e.code==="Digit2") player.color="#ff595e";
-  if(e.code==="Digit3") player.color="#8ac926";
-  if(e.code==="Digit4") player.color="#1982c4";
+/* ============================================================
+   Keyboard color switch (cosmetic)
+   ============================================================ */
+window.addEventListener("keydown", (e) => {
+  if (e.code === "Digit1") player.color = "#ffd166";
+  if (e.code === "Digit2") player.color = "#ff595e";
+  if (e.code === "Digit3") player.color = "#8ac926";
+  if (e.code === "Digit4") player.color = "#1982c4";
 });
 </script>
 </body>
