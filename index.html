@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Platformer with Double Jump</title>
+  <title>Progressive Platformer with Double Jump</title>
   <style>
     body { margin:0; background:#111; }
     canvas { display:block; }
@@ -45,6 +45,7 @@ const TILE=32;
 let coinTotal=0;
 let playerColor="#ffd166";
 
+// Simple progressive levels (you can expand with hazards, platforms, etc.)
 const levels=[
   {
     name:"Level 1",
@@ -104,7 +105,7 @@ let moveVec={x:0};
   area.addEventListener('touchend',()=>{active=false;moveVec.x=0;knob.style.left='50%';});
 })();
 
-// Double jump logic
+// Double jump function
 function tryJump(){
   if(player.jumps<2){
     player.vy=-500;
@@ -134,7 +135,7 @@ function update(dt){
   if(t===1||t===4){
     player.y=Math.floor(footY/TILE)*TILE-player.h;
     player.vy=0;player.onGround=true;
-    player.jumps=0; // reset jumps
+    player.jumps=0; // reset jumps when landing
     if(t===4){loadLevel(levelIndex+1);}
   } else {
     player.onGround=false;
