@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>2D Platformer with Touch Controls</title>
+  <title>Platformer with Coins & Shop</title>
   <style>
     body { margin:0; background:#111; }
     canvas { display:block; }
@@ -25,6 +25,11 @@
       position:fixed; top:8px; left:50%; transform:translateX(-50%);
       color:#fff; font-family:sans-serif; font-size:20px;
     }
+    .shop {
+      position:fixed; top:40px; right:20px; background:#222; color:#fff;
+      padding:10px; border-radius:8px; font-family:sans-serif;
+    }
+    .shop button { margin:4px; padding:6px; }
   </style>
 </head>
 <body>
@@ -34,66 +39,52 @@
   <div id="moveStick" class="stick-area"><div id="moveKnob" class="stick-knob"></div></div>
   <div id="jumpBtn" class="btn">Jump</div>
 </div>
+<div class="shop" id="shop">
+  <div>Coins: <span id="coinCount">0</span></div>
+  <div>Shop:</div>
+  <button onclick="buyColor('#ffd166')">Yellow (Free)</button>
+  <button onclick="buyColor('#ff0000')">Red (10)</button>
+  <button onclick="buyColor('#00ff00')">Green (10)</button>
+  <button onclick="buyColor('#0000ff')">Blue (10)</button>
+</div>
 
 <script>
 const canvas=document.getElementById("game"),ctx=canvas.getContext("2d");
 canvas.width=window.innerWidth;canvas.height=window.innerHeight;
 
 const TILE=32;
-const levels=[
-  {
-    name:"Level 1",
+let coinTotal=0;
+let playerColor="#ffd166";
+
+// Generate many levels
+const levels=[];
+for(let i=1;i<=24;i++){
+  const tiles=Array.from({length:16},(_,y)=>{
+    const row=Array(32).fill(0);
+    if(y===15){row.fill(1);row[30]=4;} // ground + goal
+    if(i%2===0 && y===13){row[8]=1;row[12]=1;row[16]=1;row[20]=1;}
+    if(i%3===0 && y===14){row[5]=2;row[6]=2;} // hazards
+    return row;
+  });
+  const coins=[
+    {x:200,y:400,collected:false},
+    {x:400,y:300,collected:false},
+    {x:600,y:350,collected:false}
+  ];
+  levels.push({
+    name:"Level "+i,
     width:32,height:16,
-    tiles:Array.from({length:16},(_,y)=>{
-      const row=Array(32).fill(0);
-      if(y===15){row.fill(1);row[30]=4;} // ground + goal
-      return row;
-    }),
-    start:{x:TILE*2,y:(15*TILE)-28}
-  },
-  {
-    name:"Level 2",
-    width:32,height:16,
-    tiles:Array.from({length:16},(_,y)=>{
-      const row=Array(32).fill(0);
-      if(y===15){row.fill(1);row[28]=4;}
-      if(y===13){row[10]=1;row[14]=1;row[18]=1;row[22]=1;}
-      return row;
-    }),
-    start:{x:TILE*2,y:(15*TILE)-28}
-  },
-  {
-    name:"Level 3",
-    width:32,height:16,
-    tiles:Array.from({length:16},(_,y)=>{
-      const row=Array(32).fill(0);
-      if(y===15){row.fill(1);row[25]=4;}
-      if(y===14){row[5]=2;row[6]=2;row[7]=2;} // hazards
-      if(y===13){row[12]=1;row[16]=1;row[20]=1;}
-      return row;
-    }),
-    start:{x:TILE*2,y:(15*TILE)-28}
-  },
-  {
-    name:"Level 4",
-    width:32,height:16,
-    tiles:Array.from({length:16},(_,y)=>{
-      const row=Array(32).fill(0);
-      if(y===15){row.fill(1);row[30]=4;}
-      if(y===12){row[8]=1;row[9]=1;row[10]=1;}
-      if(y===10){row[15]=1;row[16]=1;}
-      if(y===8){row[22]=1;}
-      return row;
-    }),
-    start:{x:TILE*2,y:(15*TILE)-28}
-  }
-];
+    tiles:tiles,
+    start:{x:TILE*2,y:(15*TILE)-28},
+    coins:coins
+  });
+}
 let levelIndex=0;
 
 const player={x:0,y:0,w:24,h:28,vx:0,vy:0,onGround:false};
 function loadLevel(i){
   levelIndex=i%levels.length;
-  document.getElementById("levelLabel").textContent="Level "+(levelIndex+1);
+  document.getElementById("levelLabel").textContent=levels[levelIndex].name;
   player.x=levels[levelIndex].start.x;
   player.y=levels[levelIndex].start.y;
   player.vx=player.vy=0;
@@ -155,8 +146,17 @@ function update(dt){
     player.vy=0;player.onGround=true;
     if(t===4){loadLevel(levelIndex+1);} // advance silently
   }
-  if(t===2){ // hazard
-    loadLevel(levelIndex); // respawn
+  if(t===2){loadLevel(levelIndex);} // hazard resets
+
+  // coin collection
+  for(const c of levels[levelIndex].coins){
+    if(!c.collected &&
+       player.x< c.x && player.x+player.w>c.x &&
+       player.y< c.y && player.y+player.h>c.y){
+      c.collected=true;
+      coinTotal++;
+      document.getElementById("coinCount").textContent=coinTotal;
+    }
   }
 }
 
@@ -172,7 +172,18 @@ function draw(){
       if(t===4){ctx.fillStyle="#1e88e5";ctx.fillRect(px,py,TILE,TILE);} // goal
     }
   }
-  ctx.fillStyle="#ffd166";ctx.fillRect(player.x,player.y,player.w,player.h);
+  // coins
+  for(const c of L.coins){
+    if(!c.collected){
+      ctx.fillStyle="#ffd700";
+      ctx.beginPath();
+      ctx.arc(c.x,c.y,10,0,Math.PI*2);
+      ctx.fill();
+    }
+  }
+  // player
+  ctx.fillStyle=playerColor;
+  ctx.fillRect(player.x,player.y,player.w,player.h);
 }
 
 let last=performance.now();
@@ -183,6 +194,10 @@ function loop(now){
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
-</script>
-</body>
-</html>
+
+// Shop
+function buyColor(color){
+  if(color==="#ffd166"){playerColor=color;return;}
+  if(coinTotal>=10){
+    coinTotal-=10;
+    document.getElementById("coinCount").textContent=coinTotal;
