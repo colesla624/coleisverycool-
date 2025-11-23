@@ -107,7 +107,7 @@ function update(dt){
   // --- Invulnerability timer update ---
   if(invulnerable){invulnTimer-=dt;if(invulnTimer<=0)invulnerable=false;}
 
-  // Hazards (only if not invulnerable)
+  // Hazards/enemies only if not invulnerable
   if(!invulnerable){
     for(const h of L.hazards){if(aabb(player.x,player.y,player.w,player.h,h.x,h.y,h.w,h.h)){killPlayer();return;}}
     for(const e of L.enemies){if(aabb(player.x,player.y,player.w,player.h,e.x,e.y,e.w,e.h)){killPlayer();return;}}
@@ -120,4 +120,4 @@ function update(dt){
 function draw(){
   const L=level;ctx.clearRect(0,0,canvas.width,canvas.height);
   ctx.fillStyle=L.bg;ctx.fillRect(0,0,canvas.width,canvas.height);
-  ctx.fillStyle="#555";ctx.fillRect(0,
+  ctx.fillStyle="#555";ctx.fillRect
