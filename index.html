@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>100-Level Platformer with Safety Buffer</title>
+  <title>Platformer with Invulnerability</title>
   <style>
     body { margin:0; background:#111; }
     canvas { display:block; }
@@ -47,7 +47,7 @@ function resize(){ canvas.width=window.innerWidth; canvas.height=window.innerHei
 resize(); window.addEventListener('resize',resize);
 
 const TILE=32,GROUND_Y=15*TILE;
-let coinTotal=0,hasKey=false;
+let coinTotal=0;
 const player={x:64,y:GROUND_Y-28,w:24,h:28,vx:0,vy:0,onGround:false,jumps:0,face:1,color:"#ffd166"};
 
 const keys={}; window.addEventListener("keydown",e=>keys[e.code]=true); window.addEventListener("keyup",e=>keys[e.code]=false);
@@ -62,53 +62,62 @@ document.getElementById('jumpBtn').addEventListener('touchstart',tryJump);
 
 function aabb(ax,ay,aw,ah,bx,by,bw,bh){return ax<bx+bw&&ax+aw>bx&&ay<by+bh&&ay+ah>by;}
 function onTopOf(ax,ay,aw,ah,bx,by,bw,bh){return aabb(ax,ay,aw,ah,bx,by,bw,bh)&&(ay+ah)<=(by+10)&&player.vy>=0;}
-function makePRNG(seed){let s=seed>>>0;return function(){s=(s*1664525+1013904223)>>>0;return (s&0xffffffff)/4294967296;};}
 
-// Safety buffer check
-function safePlace(obj,startX,startY){
-  const cube=Math.max(player.w,player.h);
-  const dx=Math.abs(obj.x-startX);
-  const dy=Math.abs(obj.y-startY);
-  return (dx>cube||dy>cube);
+// --- Invulnerability variables ---
+let invulnerable=false;
+let invulnTimer=0;
+
+// Kill player wrapper
+function killPlayer(){
+  loadLevel(levelIndex);       // reset level
+  invulnerable=true;           // turn on invulnerability
+  invulnTimer=1.0;             // 1 second
 }
 
 let levelIndex=1,level=null;const bullets=[];
 function setHUD(name){document.getElementById("levelLabel").textContent=`${name} | Coins: ${coinTotal}`;}
-function makeLevelBase(name){return{name,bg:"#222",dark:false,flashlight:false,lowGravity:false,friction:1.0,
-conveyorZones:[],platforms:[],hazards:[],bouncePads:[],breakables:[],door:null,key:null,coins:[],enemies:[],
-boss:false,bossReward:100,goal:{x:canvas.width-140,y:GROUND_Y-32,w:90,h:32}};}
+function makeLevelBase(name){return{name,bg:"#222",platforms:[],hazards:[],coins:[],enemies:[],boss:false,goal:{x:canvas.width-140,y:GROUND_Y-32,w:90,h:32}};}
 
-// Tutorial level
 function genTutorial(){const L=makeLevelBase("Level 1 - Tutorial");L.bg="#254027";
 L.platforms.push({x:200,y:GROUND_Y-80,w:100,h:12});L.coins.push({x:220,y:GROUND_Y-100,r:10,collected:false});
 return L;}
 
-// Example generator with safety buffer
-function genGrasslands(i,rnd){const L=makeLevelBase(`Level ${i} - Grasslands`);L.bg="#254027";
-const hazard={x:300,y:GROUND_Y-16,w:60,h:16};if(safePlace(hazard,player.x,player.y))L.hazards.push(hazard);
-const enemy={type:"patrol",x:400,y:GROUND_Y-28,w:24,h:28,dir:1,minX:380,maxX:520,speed:60};
-if(safePlace(enemy,player.x,player.y))L.enemies.push(enemy);
+function genGrasslands(i){const L=makeLevelBase(`Level ${i} - Grasslands`);L.bg="#254027";
 L.platforms.push({x:260,y:GROUND_Y-100,w:110,h:12});L.coins.push({x:280,y:GROUND_Y-120,r:10,collected:false});
+L.enemies.push({type:"patrol",x:320,y:GROUND_Y-28,w:24,h:28,dir:1,minX:300,maxX:520,speed:60});
 return L;}
 
-// Boss generator
 function genBoss(i){const L=makeLevelBase(`Level ${i} - Boss`);L.bg="#2a1f1f";L.boss=true;L.goal=null;
-const boss={type:"boss",x:520,y:GROUND_Y-80,w:100,h:100,hp:6,fire:0,rate:0.9};if(safePlace(boss,player.x,player.y))L.enemies.push(boss);
-return L;}
+L.enemies.push({type:"boss",x:520,y:GROUND_Y-80,w:100,h:100,hp:6,fire:0,rate:0.9});return L;}
 
-function generateLevel(i){const rnd=makePRNG(i*98765+12345);
-if(i===1)return genTutorial();if(i%10===0)return genBoss(i);if(i<=10)return genGrasslands(i,rnd);
-// add other world generators here (caves, sky, lava, etc.) with safePlace checks
-return genGrasslands(i,rnd);}
-
-function loadLevel(idx){levelIndex=((idx-1)%100)+1;level=generateLevel(levelIndex);hasKey=false;
+function generateLevel(i){if(i===1)return genTutorial();if(i%10===0)return genBoss(i);return genGrasslands(i);}
+function loadLevel(idx){levelIndex=((idx-1)%100)+1;level=generateLevel(levelIndex);
 player.x=64;player.y=GROUND_Y-28;player.vx=0;player.vy=0;player.jumps=0;player.onGround=false;player.face=1;
 bullets.length=0;setHUD(level.name);document.getElementById("skipBtn").style.display=level.boss?"block":"none";}
 loadLevel(1);document.getElementById("skipBtn").onclick=()=>loadLevel(levelIndex+1);
 
-// Update/draw loop (simplified for brevity)
-function update(dt){const L=level;const gravity=L.lowGravity?520:1000;const baseSpeed=240;const friction=L.friction||1.0;
-const left=keys["ArrowLeft"]||keys["KeyA"]||moveVec.x<-0.2;const right=keys["ArrowRight"]||keys["KeyD"]||moveVec.x>0.2;
-if(left&&!right){player.vx=-baseSpeed*friction;player.face=-1;}else if(right&&!left){player.vx=baseSpeed*friction;player.face=1;}else player.vx*=0.85*friction;
-if(keys["Space"]||keys["ArrowUp"]||keys["KeyW"])tryJump();player.vy+=gravity*dt;player.x+=player.vx*dt;player.y+=player.vy*dt;
-if(player.y+player
+function update(dt){
+  const L=level;const gravity=1000;const baseSpeed=240;
+  const left=keys["ArrowLeft"]||keys["KeyA"]||moveVec.x<-0.2;const right=keys["ArrowRight"]||keys["KeyD"]||moveVec.x>0.2;
+  if(left&&!right){player.vx=-baseSpeed;player.face=-1;}else if(right&&!left){player.vx=baseSpeed;player.face=1;}else player.vx*=0.85;
+  if(keys["Space"]||keys["ArrowUp"]||keys["KeyW"])tryJump();
+  player.vy+=gravity*dt;player.x+=player.vx*dt;player.y+=player.vy*dt;
+  if(player.y+player.h>GROUND_Y){player.y=GROUND_Y-player.h;player.vy=0;player.onGround=true;player.jumps=0;}else player.onGround=false;
+
+  // --- Invulnerability timer update ---
+  if(invulnerable){invulnTimer-=dt;if(invulnTimer<=0)invulnerable=false;}
+
+  // Hazards (only if not invulnerable)
+  if(!invulnerable){
+    for(const h of L.hazards){if(aabb(player.x,player.y,player.w,player.h,h.x,h.y,h.w,h.h)){killPlayer();return;}}
+    for(const e of L.enemies){if(aabb(player.x,player.y,player.w,player.h,e.x,e.y,e.w,e.h)){killPlayer();return;}}
+  }
+
+  // Goal
+  if(!L.boss&&L.goal&&aabb(player.x,player.y,player.w,player.h,L.goal.x,L.goal.y,L.goal.w,L.goal.h)){loadLevel(levelIndex+1);return;}
+}
+
+function draw(){
+  const L=level;ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle=L.bg;ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle="#555";ctx.fillRect(0,
