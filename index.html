@@ -2,14 +2,34 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>2D Platformer</title>
+  <title>2D Platformer with Touch Controls</title>
   <style>
     body { margin:0; background:#111; }
     canvas { display:block; }
+    .hud { position:fixed; inset:0; pointer-events:none; }
+    .stick-area, .btn { pointer-events:auto; touch-action:none; }
+    .stick-area {
+      position:fixed; bottom:16px; left:16px; width:120px; height:120px;
+      border-radius:50%; background:rgba(255,255,255,0.1);
+    }
+    .stick-knob {
+      position:absolute; left:50%; top:50%; width:40px; height:40px;
+      border-radius:50%; background:#0af; transform:translate(-50%,-50%);
+    }
+    .btn {
+      position:fixed; right:16px; bottom:16px; width:80px; height:80px;
+      border-radius:50%; background:#fff; display:flex; align-items:center; justify-content:center;
+      font-weight:bold;
+    }
   </style>
 </head>
 <body>
 <canvas id="game"></canvas>
+<div class="hud">
+  <div id="moveStick" class="stick-area"><div id="moveKnob" class="stick-knob"></div></div>
+  <div id="jumpBtn" class="btn">Jump</div>
+</div>
+
 <script>
 const canvas=document.getElementById("game"),ctx=canvas.getContext("2d");
 canvas.width=window.innerWidth;canvas.height=window.innerHeight;
@@ -24,7 +44,6 @@ const levels=[
       if(y===15){row.fill(1);row[30]=4;} // ground + goal
       return row;
     }),
-    // spawn just above ground row (row 15)
     start:{x:TILE*2,y:(15*TILE)-28}
   },
   {
@@ -36,7 +55,6 @@ const levels=[
       if(y===13){row[10]=1;row[14]=1;row[18]=1;row[22]=1;} // stepping stones
       return row;
     }),
-    // spawn just above ground row (row 15)
     start:{x:TILE*2,y:(15*TILE)-28}
   }
 ];
@@ -62,10 +80,35 @@ const keys={};
 window.addEventListener("keydown",e=>keys[e.code]=true);
 window.addEventListener("keyup",e=>keys[e.code]=false);
 
+// Touch joystick
+let moveVec={x:0};
+function setupStick(){
+  const area=document.getElementById('moveStick'),knob=document.getElementById('moveKnob');
+  let active=false,startX=0;
+  area.addEventListener('touchstart',e=>{active=true;startX=e.touches[0].clientX;});
+  area.addEventListener('touchmove',e=>{
+    if(!active)return;
+    const dx=e.touches[0].clientX-startX;
+    const radius=area.clientWidth/2-20;
+    const nx=Math.max(-radius,Math.min(radius,dx));
+    knob.style.left=`calc(50% + ${nx}px)`;
+    moveVec.x=nx/radius;
+  });
+  area.addEventListener('touchend',()=>{active=false;moveVec.x=0;knob.style.left='50%';});
+}
+setupStick();
+
+// Jump button
+document.getElementById('jumpBtn').addEventListener('touchstart',()=>{
+  if(player.onGround){player.vy=-500;player.onGround=false;}
+});
+
 function update(dt){
   // input
-  if(keys["ArrowLeft"]) player.vx=-200;
-  else if(keys["ArrowRight"]) player.vx=200;
+  const left=keys["ArrowLeft"]||moveVec.x<-0.2;
+  const right=keys["ArrowRight"]||moveVec.x>0.2;
+  if(left&&!right) player.vx=-200;
+  else if(right&&!left) player.vx=200;
   else player.vx=0;
   if(keys["Space"]&&player.onGround){player.vy=-500;player.onGround=false;}
 
@@ -79,7 +122,7 @@ function update(dt){
   if(t===1||t===4){
     player.y=Math.floor((player.y+player.h)/TILE)*TILE-player.h;
     player.vy=0;player.onGround=true;
-    if(t===4){alert("Level complete!");loadLevel(levelIndex+1);}
+    if(t===4){loadLevel(levelIndex+1);} // silently advance
   }
 }
 
