@@ -2,96 +2,109 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Hyper Realistic Platformer</title>
+  <title>2D Platformer</title>
   <style>
-    body { margin:0; overflow:hidden; }
+    body { margin:0; background:#111; }
     canvas { display:block; }
   </style>
 </head>
 <body>
-<script src="https://unpkg.com/three@0.161.0/build/three.min.js"></script>
+<canvas id="game"></canvas>
 <script>
-let scene=new THREE.Scene();
-scene.background=new THREE.Color(0x87ceeb); // sky blue
+const canvas=document.getElementById("game"),ctx=canvas.getContext("2d");
+canvas.width=window.innerWidth;canvas.height=window.innerHeight;
 
-let camera=new THREE.PerspectiveCamera(75,window.innerWidth/window.innerHeight,0.1,1000);
-let renderer=new THREE.WebGLRenderer();
-renderer.setSize(window.innerWidth,window.innerHeight);
-document.body.appendChild(renderer.domElement);
-
-// Lights
-const hemi=new THREE.HemisphereLight(0xffffff,0x444444,1);
-scene.add(hemi);
-const dir=new THREE.DirectionalLight(0xffffff,1);
-dir.position.set(5,10,7);
-dir.castShadow=true;
-scene.add(dir);
-
-// Ground
-const groundTex=new THREE.TextureLoader().load("https://threejs.org/examples/textures/grasslight-big.jpg");
-groundTex.wrapS=groundTex.wrapT=THREE.RepeatWrapping;
-groundTex.repeat.set(25,25);
-const groundMat=new THREE.MeshLambertMaterial({map:groundTex});
-const ground=new THREE.Mesh(new THREE.PlaneGeometry(200,200),groundMat);
-ground.rotation.x=-Math.PI/2;
-scene.add(ground);
-
-// Player (sphere for now)
-const playerGeo=new THREE.SphereGeometry(1,32,32);
-const playerMat=new THREE.MeshStandardMaterial({color:0xffd166});
-const player=new THREE.Mesh(playerGeo,playerMat);
-player.position.set(0,2,0);
-scene.add(player);
-
-// Goal (blue cube)
-const goal=new THREE.Mesh(new THREE.BoxGeometry(2,2,2),new THREE.MeshStandardMaterial({color:0x1e88e5}));
-goal.position.set(20,1,0);
-scene.add(goal);
-
-// Physics
-let vel=new THREE.Vector3();
-let onGround=false;
-const GRAVITY=-30;
-function update(dt){
-  // input
-  if(keys["ArrowLeft"]) vel.x=-10;
-  else if(keys["ArrowRight"]) vel.x=10;
-  else vel.x=0;
-  if(keys["Space"]&&onGround){vel.y=15;onGround=false;}
-
-  // gravity
-  vel.y+=GRAVITY*dt;
-  player.position.addScaledVector(vel,dt);
-
-  // ground collision
-  if(player.position.y<1){
-    player.position.y=1;vel.y=0;onGround=true;
+const TILE=32;
+const levels=[
+  {
+    name:"Level 1",
+    width:32,height:16,
+    tiles:Array.from({length:16},(_,y)=>{
+      const row=Array(32).fill(0);
+      if(y===15){row.fill(1);row[30]=4;} // ground + goal
+      return row;
+    }),
+    // spawn just above ground row (row 15)
+    start:{x:TILE*2,y:(15*TILE)-28}
+  },
+  {
+    name:"Level 2",
+    width:32,height:16,
+    tiles:Array.from({length:16},(_,y)=>{
+      const row=Array(32).fill(0);
+      if(y===15){row.fill(1);row[28]=4;} // ground + goal
+      if(y===13){row[10]=1;row[14]=1;row[18]=1;row[22]=1;} // stepping stones
+      return row;
+    }),
+    // spawn just above ground row (row 15)
+    start:{x:TILE*2,y:(15*TILE)-28}
   }
+];
+let levelIndex=0;
 
-  // goal check
-  if(player.position.distanceTo(goal.position)<2){
-    alert("Level complete!");
-    player.position.set(0,2,0);
-  }
+const player={x:0,y:0,w:24,h:28,vx:0,vy:0,onGround:false};
+function loadLevel(i){
+  levelIndex=i%levels.length;
+  player.x=levels[levelIndex].start.x;
+  player.y=levels[levelIndex].start.y;
+  player.vx=player.vy=0;
+}
+loadLevel(0);
 
-  camera.position.set(player.position.x,player.position.y+5,player.position.z+15);
-  camera.lookAt(player.position);
+function tileAt(px,py){
+  const L=levels[levelIndex];
+  const tx=Math.floor(px/TILE),ty=Math.floor(py/TILE);
+  if(tx<0||ty<0||tx>=L.width||ty>=L.height)return 0;
+  return L.tiles[ty][tx];
 }
 
-// Input
 const keys={};
 window.addEventListener("keydown",e=>keys[e.code]=true);
 window.addEventListener("keyup",e=>keys[e.code]=false);
 
-// Loop
+function update(dt){
+  // input
+  if(keys["ArrowLeft"]) player.vx=-200;
+  else if(keys["ArrowRight"]) player.vx=200;
+  else player.vx=0;
+  if(keys["Space"]&&player.onGround){player.vy=-500;player.onGround=false;}
+
+  // physics
+  player.vy+=1000*dt;
+  player.x+=player.vx*dt;
+  player.y+=player.vy*dt;
+
+  // collision
+  const t=tileAt(player.x+player.w/2,player.y+player.h);
+  if(t===1||t===4){
+    player.y=Math.floor((player.y+player.h)/TILE)*TILE-player.h;
+    player.vy=0;player.onGround=true;
+    if(t===4){alert("Level complete!");loadLevel(levelIndex+1);}
+  }
+}
+
+function draw(){
+  ctx.fillStyle="#222";ctx.fillRect(0,0,canvas.width,canvas.height);
+  const L=levels[levelIndex];
+  for(let y=0;y<L.height;y++){
+    for(let x=0;x<L.width;x++){
+      const t=L.tiles[y][x];if(!t)continue;
+      const px=x*TILE,py=y*TILE;
+      if(t===1){ctx.fillStyle="#555";ctx.fillRect(px,py,TILE,TILE);}
+      if(t===4){ctx.fillStyle="#1e88e5";ctx.fillRect(px,py,TILE,TILE);}
+    }
+  }
+  ctx.fillStyle="#ffd166";ctx.fillRect(player.x,player.y,player.w,player.h);
+}
+
 let last=performance.now();
-function animate(now){
-  requestAnimationFrame(animate);
+function loop(now){
   const dt=(now-last)/1000;last=now;
   update(dt);
-  renderer.render(scene,camera);
+  draw();
+  requestAnimationFrame(loop);
 }
-animate();
+requestAnimationFrame(loop);
 </script>
 </body>
 </html>
